@@ -69,6 +69,19 @@ export class VM {
     this.__create();
   }
 
+  /*
+   * 获取全部的label
+   */
+  getAllLabelNode() {
+    return this.nodeList.labelNodeList;
+  }
+
+  /*
+   * 获取全部的path
+   */
+  getAllPathNode() {
+    return this.nodeList.pathNodeList;
+  }
   /**
    * 设置样式配置
    * @param {object} config
@@ -1718,8 +1731,10 @@ export class VM {
           this.nodeList.pathNodeList.splice(j, 1);
           this.$relationLayer.removeChild(vnodeItem.$el);
           j--;
+          break;
         }
       }
+
     }
   }
 

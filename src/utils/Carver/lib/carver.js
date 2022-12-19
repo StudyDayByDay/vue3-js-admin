@@ -45,6 +45,20 @@ export class Carver {
     }
   }
 
+  /*
+   * 获取全部的label
+   */
+  getAllLabelNode() {
+    return this.$VM.getAllLabelNode();
+  }
+
+  /*
+   * 获取全部的path
+   */
+  getAllPathNode() {
+    return this.$VM.getAllPathNode();
+  }
+
   /**
    * 设置样式配置
    * @param {object} config

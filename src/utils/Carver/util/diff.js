@@ -156,13 +156,11 @@ export function labelDiff(vnodeList, labelInfo) {
 export function pathDiff(vnodeList, pathInfo) {
   const updatedList = []; // 被更新的对象
   const newList = []; // 新添加的对象
-
-  // 遍历新的标签位置信息
-  pathInfo.forEach((pathItem) => {
-    /**
-     * 在当前已经存在的虚拟节点中查找与labelItem相同的标签
-     * 当labelItem与虚拟节点中的 文本索引、文本内容、自定义数据都完全相同时才判定为相同标签
-     */
+  const pathInfoLength = pathInfo.length;
+  
+  // 遍历新标签的位置
+  for(let i = 0; i < pathInfoLength; i++) {
+    const pathItem = pathInfo[i];
     const vnode = vnodeList.find(
       // 当单行变多行时；会生成两个pathInfo信息；当这条多行变单行时，会生成一个新的pathInfo信息；而另两个换行的pathInfo生成的vnode 则会被删除
       (vnodeItem) =>
@@ -222,14 +220,10 @@ export function pathDiff(vnodeList, pathInfo) {
       if (deff) {
         updatedList.push(vnode);
       }
-    }
-
-    // 如果不存在相同的虚拟节点则返回labelItem用于创建新的虚拟节点
-    if (!vnode) {
+    } else {
       newList.push(pathItem);
     }
-  });
-
+  }
   return {
     updated: updatedList.length ? updatedList : null,
     newPath: newList.length ? newList : null,
