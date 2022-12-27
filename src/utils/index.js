@@ -18,3 +18,5 @@ const paths = Array.from({length: 580}).map((item, index) => {
 
 export {labels, paths};
 export { Carver } from "./Carver/lib/carver";
+export * from './api.js';
+export * from './axios.js';
