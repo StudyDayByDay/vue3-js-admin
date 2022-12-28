@@ -33,7 +33,6 @@ export class Carver {
         "%c%s",
         "color:#18C59A;font-size:24px;font-family:STHupo",
         "Hello Carver",
-        `v${require("../../package.json").version}`
       );
     } catch (e) {
       console.log(

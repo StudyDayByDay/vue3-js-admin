@@ -40,4 +40,9 @@ export default {
         url: '/mark/label/comboBox',
         method: 'get'
     },
+    // 分页数据
+    page: {
+        url: '/mark/page',
+        method: 'get'
+    }
 };
