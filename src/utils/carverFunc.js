@@ -3,6 +3,11 @@ function globalOffsetToPageOffset(offset, page) {
     return offset - page.startOffset;
 }
 
+// 
+function pageOffsetToGlobalOffset(offset, page) {
+    return offset + page.startOffset;
+}
+
 
 // entitys转labels
 function entitysToLabels(arr) {
@@ -22,4 +27,4 @@ function entitysToLabels(arr) {
     });
     return Array.from(labelMap);
   }
-export {globalOffsetToPageOffset, entitysToLabels};
+export {globalOffsetToPageOffset, pageOffsetToGlobalOffset, entitysToLabels};

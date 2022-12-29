@@ -2,16 +2,10 @@
     <div class="carver">
       <div class="id">{{mrId}}</div>
       <div class="header">
-        <el-button :color="color" :dark="true" @click="wordTime">文档时间</el-button>
-        <el-button :color="color" :dark="true" @click="moduleSign">子模块手动划取</el-button>
-        <el-button :color="color" :dark="true" @click="moduleSignAuto">自动划分子模块</el-button>
-        <el-button :color="color" :dark="true" @click="setTags">应用标注库</el-button>
-        <el-button :color="color" :dark="true" @click="setThisTags">应用本篇标注</el-button>
-        <el-button :color="color" :dark="true" @click="updateTag">修改</el-button>
-        <el-button :color="color" :dark="true" @click="copyTag">复制</el-button>
-        <el-button :color="color" :dark="true" @click="patchAddPath">批量建立关系</el-button>
-        <el-button :color="color" :dark="true" @click="setMap">手动建立映射</el-button>
-        <el-button :color="color" :dark="true" @click="signByAI">AI标注</el-button>
+        <el-button :color="color" :dark="true" @click="moduleSign">划取子模块</el-button>
+        <el-button :color="color" :dark="true" @click="entityByLabel">划取实体标注标签</el-button>
+        <el-button :color="color" :dark="true" @click="labelByPath">标签添加关系</el-button>
+        <el-button type="danger" @click="cancelOpertion">取消操作</el-button>
       </div>
       <div class="content">
         <div class="content-left">
@@ -23,7 +17,7 @@
                   <info-filled />
                 </el-icon>
               </template>
-              <el-tree-select v-model="relation" :data="relationData" :render-after-expand="false" />
+              <el-tree-select v-model="relation" :data="relationData" :render-after-expand="false" @current-change="relationChange"/>
             </el-collapse-item>
             <el-collapse-item name="tag">
               <template #title>
@@ -32,13 +26,13 @@
                   <info-filled />
                 </el-icon>
               </template>
-              <el-tree-select v-model="tag" :data="tagData" :render-after-expand="false" />
+              <el-tree-select v-model="tag" :data="tagData" :render-after-expand="false" @current-change="tagChange"/>
             </el-collapse-item>
           </el-collapse>
         </div>
-        <div class="content-center">
+        <div class="content-center" v-loading="loading">
             <div class="content-center-header">
-                <span>当前流程</span>
+                <span>当前流程：{{ procedure }}</span>
                 <span>
                   <span class="word">划取：<span class="blue"></span></span>
                   <span class="word">AI解析：<span class="red"></span></span>
@@ -51,7 +45,7 @@
         <div class="content-right">
           <el-tabs v-model="activeName">
             <el-tab-pane label="实体" name="entity">
-              <el-collapse>
+              <el-collapse v-model="collapseArr">
                 <el-collapse-item v-for="label in entityIsolationData" :key="label[0]" :name="label[0]" :title="label[0].split('-')[1]">
                   <el-tag class="tag" v-for="(entityItem, ind) in label[1].entity" :key="entityItem.id + ind" closable :disable-transitions="false" @close="handleDeleteEntity(entityItem)">
                     {{ entityItem.text }}
@@ -72,28 +66,34 @@
 <script setup>
 import { reactive, ref, watch, onMounted } from 'vue';
 import { InfoFilled } from '@element-plus/icons-vue'
-import { Carver, globalOffsetToPageOffset, entitysToLabels } from '@/utils';
+import { Carver, globalOffsetToPageOffset, pageOffsetToGlobalOffset, entitysToLabels } from '@/utils';
 import apis from '@/api';
 import {useRoute} from 'vue-router';
+import { ElMessage } from 'element-plus'
 
 // 按钮颜色值
 const color = ref('#2c3e50');
+// loading
+const loading = ref(true);
 // 左侧collapse
 const collapse = reactive(['relation', 'tag']);
 // 左侧关系树控件、标签树控件
 const relation = ref(), tag = ref();
-// 左侧关系数据
-let relationData = [], tagData = [];
-// 左侧标签数据
-
+// 左侧关系数据、左侧标签数据
+const relationData = reactive([]), tagData = reactive([]);
 // 子模块数据
 const moduleData = [];
 // 实体数据
 const entitys = [];
-
+// 关系数据
+const entityRelations = [];
 // 右侧tabs绑定数据
 const activeName = ref('entity');
+// 右侧手风琴绑定数组
+const collapseArr = ref([]);
 // 右侧实体数据
+const entityIsolationDataAll = [];
+// 右侧渲染实体数据
 const entityIsolationData = reactive([]);
 // 结构化显示过滤值
 const filterText = ref('');
@@ -103,6 +103,7 @@ const defaultProps = {
   children: 'children',
   label: 'label',
 }
+// ********************************
 // 划词dom
 const carverPanel = ref(null);
 // 划词实例
@@ -110,13 +111,21 @@ let carver;
 
 // 文档id
 const {query: {mrId}} = useRoute();
+// 当前流程
+const procedure = ref('无');
 // 分页数据
 let pages = [];
 // 当前页数据
 const currentPage = ref(1);
 // 总数
 const pageCount = ref(1);
-
+// 当前选中的label
+let currentLabel = null;
+// relation操作
+const relationOperate = {
+  flag: false,
+  currentRelation: null,
+};
 
 // 初始化流程：1、渲染子模块部分；2、渲染时间模块；3、渲染实体；4、渲染连线；5、渲染右侧isolation_list孤儿实体清单；6、获取右侧结构数据并渲染getStructureTree
 
@@ -231,7 +240,7 @@ const entityList = () => {
 const entityRelationList = () => {
   return new Promise((resolve, reject) => {
     apis.entityRelationList({mrId}).then(({data}) => {
-      console.log(data, 'entityPaths');
+      entityRelations.push(...data);
       resolve('entityPaths ok');
     }).catch((error) => {
       reject(error)
@@ -242,7 +251,9 @@ const entityRelationList = () => {
 const entityIsolationList = () => {
   return new Promise((resolve, reject) => {
     apis.entityIsolationList({mrId}).then(({data}) => {
-      renderPageIsolationEntity(data);
+      entityIsolationDataAll.length = 0;
+      entityIsolationDataAll.push(...data);
+      renderPageIsolationEntity();
       resolve('entityIsolationList ok');
     }).catch((error) => {
       reject(error)
@@ -264,7 +275,8 @@ const entityStructure = () => {
 const relationComboBox = () => {
   return new Promise((resolve, reject) => {
     apis.relationComboBox().then(({data}) => {
-      relationData = data
+      console.log(data, '什么情况');
+      relationData.push(...data);
       resolve('relationComboBox ok');
     }).catch((error) => {
       reject(error)
@@ -275,7 +287,7 @@ const relationComboBox = () => {
 const labelComboBox = () => {
   return new Promise((resolve, reject) => {
     apis.labelComboBox().then(({data}) => {
-      tagData = data;
+      tagData.push(...data);
       resolve('labelComboBox ok');
     }).catch((error) => {
       reject(error)
@@ -284,27 +296,67 @@ const labelComboBox = () => {
 }
 
 // **************  按钮操作  **************
-// 文档时间
-const wordTime = () => {};
 // 子模块手动划取
 const moduleSign = () => {};
-// 自动划分子模块
-const moduleSignAuto = () => {};
-// 应用标注库
-const setTags = () => {};
-// 应用本篇标注
-const setThisTags = () => {};
-// 修改
-const updateTag = () => {};
-// 复制
-const copyTag = () => {};
-// 批量建立关系
-const patchAddPath = () => {};
-// 手动建立映射
-const setMap = () => {};
-// AI标注
-const signByAI = () => {};
+// 划取实体标注标签
+const entityByLabel = () => {
+  // 如果选择了标签就开启划词，否则进行提示
+  if (currentLabel) {
+    procedure.value = '标记实体';
+    // 调用划词方法
+    startBatchCarver(
+      function(entity) {
+          entity.labels = [currentLabel];
+          createEntity(entity);
+      }
+    )
+  } else {
+    ElMessage({
+      message: '请先选择标签',
+      type: 'warning',
+    })
+  }
+};
+// 标签添加关系
+const labelByPath = () => {
+  if (relationOperate.currentRelation) {
+    relationOperate.flag = true;
+    procedure.value = '添加连线';
+  } else {
+    ElMessage({
+      message: '请先选择关系',
+      type: 'warning',
+    })
+  }
+};
+// 取消之前的操作
+const cancelOpertion = () => {
+  // 把当前流程置空
+  procedure.value = '无';
+  // 把当前选中的标签置空
+  tag.value = '';
+  currentLabel = null;
+  relation.value = '';
+  relationOperate.currentRelation = null;
+  relationOperate.flag = false;
+  // 中断划词流程
+  carver.cancelSelect();
+};
 
+// 当前关系变化
+const relationChange = (e) => {
+  const {children, label: title, pid, value: id} = e;
+  if (!children.length) {
+    relationOperate.currentRelation = {id, pid, title};
+  }
+};
+// 当选中的标签变化
+const tagChange = (tag) => {
+  const {children, label: title, pid, value: id} = tag;
+  if (!children.length) {
+    currentLabel = {id, pid, title};
+  }
+};
 // **************  carver  **************
 const initialize = () => {
     carver = new Carver({
@@ -336,79 +388,217 @@ const initialize = () => {
         console.log(target, e, 'path');
     };
     carver.onLabelClick = async (target, e) => {
-        console.log(target, e, 'label');
+      e.stopPropagation()
+      console.log(target, e, 'label');
+      if (target.exData.indexOf('entity') > -1) {
+        // 点击的是实体
+        const page = pages[currentPage.value - 1];
+        // 点击了添加关系
+        if (relationOperate.flag) {
+          carver.connect(target).then(({startLabel, endLabel}) => {
+            const to = {
+              id: Number(startLabel.exData.substr(7)),
+              textContent: startLabel.textContent,
+              start_offset: pageOffsetToGlobalOffset(startLabel.startIndex, page),
+              end_offset: pageOffsetToGlobalOffset(startLabel.endIndex, page),
+            };
+            const from = {
+              // 截取包含第七位之后的作为id
+              id: Number(endLabel.exData.substr(7)),
+              textContent: endLabel.textContent,
+              start_offset: pageOffsetToGlobalOffset(endLabel.startIndex, page),
+              end_offset: pageOffsetToGlobalOffset(endLabel.endIndex, page),
+            };
+            createEntityRelation(to, from);
+          })
+          return
+        }
+      } else if (target.exData.indexOf('time') > -1) {
+        // 点击的是模块
+      }
     }
 }
 
 // 分页数据处理
 const handleCurrentChange = (e) => {
+  loading.value = true;
   carver.text = pages[e-1].text;
-  renderPageModule();
-  renderPageMarks();
+  renderPageIsolationEntity();
+  // 渲染划词的部分，需要等待渲染完之后把loading状态置为false
+  Promise.all([renderPageModule(), renderPageEntitys(), renderPageEntityRelation()]).then(() => {
+    loading.value = false;
+  });
 }
 
 // 渲染子模块
 const renderPageModule = () => {
-  // moduleData
-  const page = pages[currentPage.value - 1];
-  const contentStartOffset = pages[currentPage.value - 1].startOffset;
-  const contentEndOffset = pages[currentPage.value - 1].endOffset;
-  // 过滤在当前文章内的模块
-  const marks = moduleData.filter(item => {
-      return item.startOffset >= contentStartOffset && item.endOffset <= contentEndOffset
-  }).map((item) => {
-    return {
-      startIndex: globalOffsetToPageOffset(item.startOffset, page),
-      endIndex: globalOffsetToPageOffset(item.endOffset, page),
-      textContent: '子模块',
-      exData: 'module_' + item.id,
-      style: {
-        backgroundColor: 'red',
-      },
-    };
+  return new Promise((resolve, reject) => {
+    const page = pages[currentPage.value - 1];
+    const contentStartOffset = pages[currentPage.value - 1].startOffset;
+    const contentEndOffset = pages[currentPage.value - 1].endOffset;
+    // 过滤在当前文章内的模块
+    const marks = moduleData.filter(item => {
+        return item.startOffset >= contentStartOffset && item.endOffset <= contentEndOffset
+    }).map((item) => {
+      return {
+        startIndex: globalOffsetToPageOffset(item.startOffset, page),
+        endIndex: globalOffsetToPageOffset(item.endOffset, page),
+        textContent: '子模块',
+        exData: 'module_' + item.id,
+        style: {
+          backgroundColor: 'red',
+        },
+      };
+    });
+    carver.addLabel(marks).then(() => {
+      resolve('pageModule, ok');
+    }).catch((err) => {
+      reject(err);
+    });
   });
-  carver.addLabel(marks)
 }
 
-const renderPageMarks = () => {
-  const page = pages[currentPage.value - 1];
-  const contentStartOffset = pages[currentPage.value - 1].startOffset;
-  const contentEndOffset = pages[currentPage.value - 1].endOffset;
+// 渲染实体
+const renderPageEntitys = (alone) => {
+  return new Promise((resolve, reject) => {
+    const page = pages[currentPage.value - 1];
+    const contentStartOffset = pages[currentPage.value - 1].startOffset;
+    const contentEndOffset = pages[currentPage.value - 1].endOffset;
+    const handleArr = alone || entitys;
 
-  const marks = entitys.filter(entity => {
-      return entity.startOffset >= contentStartOffset && entity.endOffset <= contentEndOffset;
-  }).map((item) => {
-    return {
-      startIndex: globalOffsetToPageOffset(item.startOffset, page),
-      endIndex: globalOffsetToPageOffset(item.endOffset, page),
-      textContent: item.labels[0].title,
-      exData: 'entity_' + item.id,
-      style: {
-          // backgroundColor: Controller.getEntityLabelColor(entity.from),
-          // 缺少这个字段，所以暂时用默认颜色
-          backgroundColor: '#0a1fec',
-      },
-    };
+    const marks = handleArr.filter(entity => {
+        return entity.startOffset >= contentStartOffset && entity.endOffset <= contentEndOffset;
+    }).map((item) => {
+      return {
+        startIndex: globalOffsetToPageOffset(item.startOffset, page),
+        endIndex: globalOffsetToPageOffset(item.endOffset, page),
+        textContent: item.labels[0].title,
+        exData: 'entity_' + item.id,
+        style: {
+            // backgroundColor: Controller.getEntityLabelColor(entity.from),
+            // 缺少这个字段，所以暂时用默认颜色
+            backgroundColor: '#0a1fec',
+        },
+      };
+    });
+    carver.addLabel(marks).then(() => {
+      resolve('pageMarks, ok');
+    }).catch((err) => {
+      reject(err);
+    });
   });
-  console.log(entitys, marks, '我猜是没有');
-  carver.addLabel(marks)
 }
 
+// 渲染页面关系
+const renderPageEntityRelation = () => {
+  return new Promise((reslove, reject) => {
+    const page = pages[currentPage.value - 1];
+    const contentStartOffset = page.startOffset;
+    const contentEndOffset = page.endOffset;
+    const promiseArr = [];
+
+    entityRelations.filter(item => {
+        return item.from.startOffset >= contentStartOffset && item.from.endOffset <= contentEndOffset
+    }).forEach(item => {
+      promiseArr.push(renderEntityRelation(item.id, item.fromId, item.toId, item.relationVo.title));
+    })
+    Promise.all(promiseArr).then(() => {
+      reslove();
+    }).catch(() => {
+      reject();
+    });
+  });
+}
 // 渲染右侧实体部分
-const renderPageIsolationEntity = (data) => {
+const renderPageIsolationEntity = () => {
   const contentStartOffset = pages[currentPage.value - 1].startOffset;
   const contentEndOffset = pages[currentPage.value - 1].endOffset;
   entityIsolationData.length = 0;
-  const isolationEntitys = data.filter(item => {
+  const isolationEntitys = entityIsolationDataAll.filter(item => {
     return item.startOffset >= contentStartOffset && item.endOffset <= contentEndOffset
   })
   // 这里要处理一下isolationEntitys这些实体数据才能显示出来，要分一下类，用labels来做主键
   entityIsolationData.push(...entitysToLabels(isolationEntitys));
-  console.log(entityIsolationData, '看看过滤之后的实体');
+  collapseArr.value.length = 0;
+  collapseArr.value = entityIsolationData.map(item => item[0]);
 }
 // 右侧实体部分删除
 const handleDeleteEntity = (entity) => {
   console.log(entity, '删除entity');
+}
+// 点击标签开始批量划词
+const startBatchCarver = (callback) => {
+    carver.cancelSelect()
+    carver.select(true, e => {
+        console.log(e)
+        if (e.text !== '') {
+            callback(e)
+        }
+    }).catch(e => {
+        console.log(e)
+    })
+}
+// 创建实体
+const createEntity = (scribble) => {
+  const page = pages[currentPage.value - 1];
+  const globalStartOffset = pageOffsetToGlobalOffset(scribble.fromIndex, page);
+  const globalEndOffset = pageOffsetToGlobalOffset(scribble.toIndex, page);
+  const param = {
+      text: scribble.text,
+      startOffset: globalStartOffset,
+      endOffset: globalEndOffset,
+      labelId: scribble.labels[0].id,
+      mrId,
+  }
+  return apis.addEntity(param).then(({data: backEntity}) => {
+      // const backEntity = data.entity;
+      // backEntity.labels = scribble.labels;
+      entitys.push(backEntity);
+      renderPageEntitys([backEntity])
+      entityIsolationList();
+      return backEntity;
+  }).catch (error => {
+      console.log('创建实体失败：', error)
+      //取消本次划取
+      carver.revoke()
+  })
+}
+
+// 创建关系
+const createEntityRelation = (to, from) => {
+  loading.value = true;
+  const param = {
+      fromId: from.id,
+      toId: to.id,
+      relationId: relationOperate.currentRelation.id,
+      mrId,
+  }
+  return apis.addEntityRelation(param).then(({data: relation}) => {
+    entityRelations.push(relation);
+    entityIsolationList();
+    entityStructure();
+
+    renderEntityRelation(relation.id, relation.fromId, relation.toId, relation.relationVo.title).then(() => {
+      loading.value = false;
+    });
+    return relation;
+  }).catch (() => {
+  })
+}
+
+// 渲染关系
+const renderEntityRelation = (entityRelationId, fromEntityId, toEntityId, title) => {
+  return carver.addPathByExData([
+      {
+          textContent: title,
+          startLabelExData: 'entity_' + fromEntityId,
+          endLabelExData: 'entity_' + toEntityId,
+          exData: entityRelationId,
+          style: {
+              borderColor: 'red',
+          },
+      }
+  ]);
 }
 </script>
 
