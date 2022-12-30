@@ -1,5 +1,5 @@
 <template>
-    <div class="carver">
+    <div class="carver" v-loading="loading">
       <div class="id">{{mrId}}</div>
       <div class="header">
         <el-button :color="color" :dark="true" @click="moduleSign">划取子模块</el-button>
@@ -30,7 +30,7 @@
             </el-collapse-item>
           </el-collapse>
         </div>
-        <div class="content-center" v-loading="loading">
+        <div class="content-center">
             <div class="content-center-header">
                 <span>当前流程：{{ procedure }}</span>
                 <span>
@@ -47,15 +47,26 @@
             <el-tab-pane label="实体" name="entity">
               <el-collapse v-model="collapseArr">
                 <el-collapse-item v-for="label in entityIsolationData" :key="label[0]" :name="label[0]" :title="label[0].split('-')[1]">
-                  <el-tag class="tag" v-for="(entityItem, ind) in label[1].entity" :key="entityItem.id + ind" closable :disable-transitions="false" @close="handleDeleteEntity(entityItem)">
+                  <el-tag class="tag" v-for="(entityItem, ind) in label[1].entity" :key="entityItem.id + ind" :effect="currentClickEntityId === entityItem.id ? 'dark' : 'light'" closable :disable-transitions="false" @click="handleClickEntity(entityItem)" @close="handleDeleteEntity(entityItem)">
                     {{ entityItem.text }}
                   </el-tag>
                 </el-collapse-item>
               </el-collapse>
             </el-tab-pane>
             <el-tab-pane label="结构化显示" name="structure">
-              <el-input v-model="filterText" placeholder="输入参数过滤数据" />
-              <el-tree ref="treeRef" class="filter-tree" :data="dataTree" :props="defaultProps" default-expand-all :filter-node-method="filterNode"/>
+              <el-tree ref="treeRef" class="filter-tree" :data="structureData" :props="defaultProps" default-expand-all :expand-on-click-node="false" check-on-click-node highlight-current @node-click="handleStructureClick">
+                <template #default="{ node, data }">
+                  <el-popover placement="bottom" :width="200" trigger="contextmenu">
+                    <template #reference>
+                      <span>{{ node.label }}</span>
+                    </template>
+                    <span>
+                      <el-button style="margin-right: 5px" text type="danger" size="small" @click="deleteStructureEntity(data)">删除实体</el-button>
+                      <el-button text type="danger" size="small" @click="deleteStructureRelation(data)">删除关系</el-button>
+                    </span>
+                  </el-popover>
+                </template>
+              </el-tree>
             </el-tab-pane>
           </el-tabs>
         </div>
@@ -64,12 +75,12 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch, onMounted } from 'vue';
+import { reactive, ref, onMounted } from 'vue';
 import { InfoFilled } from '@element-plus/icons-vue'
 import { Carver, globalOffsetToPageOffset, pageOffsetToGlobalOffset, entitysToLabels } from '@/utils';
 import apis from '@/api';
 import {useRoute} from 'vue-router';
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 // 按钮颜色值
 const color = ref('#2c3e50');
@@ -84,9 +95,9 @@ const relationData = reactive([]), tagData = reactive([]);
 // 子模块数据
 const moduleData = [];
 // 实体数据
-const entitys = [];
+let entitys = [];
 // 关系数据
-const entityRelations = [];
+let entityRelations = [];
 // 右侧tabs绑定数据
 const activeName = ref('entity');
 // 右侧手风琴绑定数组
@@ -95,13 +106,13 @@ const collapseArr = ref([]);
 const entityIsolationDataAll = [];
 // 右侧渲染实体数据
 const entityIsolationData = reactive([]);
-// 结构化显示过滤值
-const filterText = ref('');
-// 结构化树ref
-const treeRef = ref(null);
+// 右侧点击实体Id
+const currentClickEntityId = ref(0);
+// 右侧结构化数据
+const structureData = reactive([]);
 const defaultProps = {
-  children: 'children',
-  label: 'label',
+  children: 'childList',
+  label: 'nodeTitle',
 }
 // ********************************
 // 划词dom
@@ -134,66 +145,6 @@ onMounted(() => {
   initialize();
   getInitData();
 });
-
-watch(filterText, (val) => {
-  treeRef.value.filter(val);
-});
-
-const filterNode = (value, data) => {
-  if (!value) return true
-  return data.label.includes(value)
-}
-
-const dataTree = [
-  {
-    id: 1,
-    label: 'Level one 1',
-    children: [
-      {
-        id: 4,
-        label: 'Level two 1-1',
-        children: [
-          {
-            id: 9,
-            label: 'Level three 1-1-1',
-          },
-          {
-            id: 10,
-            label: 'Level three 1-1-2',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 2,
-    label: 'Level one 2',
-    children: [
-      {
-        id: 5,
-        label: 'Level two 2-1',
-      },
-      {
-        id: 6,
-        label: 'Level two 2-2',
-      },
-    ],
-  },
-  {
-    id: 3,
-    label: 'Level one 3',
-    children: [
-      {
-        id: 7,
-        label: 'Level two 3-1',
-      },
-      {
-        id: 8,
-        label: 'Level two 3-2',
-      },
-    ],
-  },
-]
 
 // **************  获取数据  **************
 // 初始化接口数据
@@ -264,7 +215,8 @@ const entityIsolationList = () => {
 const entityStructure = () => {
   return new Promise((resolve, reject) => {
     apis.entityStructure({mrId}).then(({data}) => {
-      console.log(data, 'entityStructure');
+      structureData.length = 0;
+      structureData.push(...data);
       resolve('entityStructure ok');
     }).catch((error) => {
       reject(error)
@@ -413,6 +365,9 @@ const initialize = () => {
           })
           return
         }
+        // TODO：点击带有关系的实体会跳转到结构化显示这部分来
+        currentClickEntityId.value = Number(target.exData.substr(7));
+        console.log(Number(target.exData.substr(7)), '3333');
       } else if (target.exData.indexOf('time') > -1) {
         // 点击的是模块
       }
@@ -422,12 +377,15 @@ const initialize = () => {
 // 分页数据处理
 const handleCurrentChange = (e) => {
   loading.value = true;
-  carver.text = pages[e-1].text;
-  renderPageIsolationEntity();
-  // 渲染划词的部分，需要等待渲染完之后把loading状态置为false
-  Promise.all([renderPageModule(), renderPageEntitys(), renderPageEntityRelation()]).then(() => {
-    loading.value = false;
-  });
+  setTimeout(() => {
+    carver.text = pages[e-1].text;
+    // renderPageIsolationEntity();
+    // 渲染划词的部分，需要等待渲染完之后把loading状态置为false
+    Promise.all([renderPageModule(), renderPageEntitys(), renderPageEntityRelation()]).then(() => {
+      renderPageIsolationEntity();
+      loading.value = false;
+    });
+  }, 200);
 }
 
 // 渲染子模块
@@ -522,9 +480,63 @@ const renderPageIsolationEntity = () => {
   collapseArr.value.length = 0;
   collapseArr.value = entityIsolationData.map(item => item[0]);
 }
+// 右侧部分实体点击
+const handleClickEntity = (entity) => {
+  console.log(entity, '点击实体');
+  hightlightEntityInReaderBox(currentClickEntityId.value, entity.id, true);
+  currentClickEntityId.value = entity.id;
+}
 // 右侧实体部分删除
-const handleDeleteEntity = (entity) => {
-  console.log(entity, '删除entity');
+const handleDeleteEntity = ({text, id}) => {
+  ElMessageBox.confirm(
+    `确定要删除实体【${text}】吗?`,'提示',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(() => {
+    deleteEntityById(id);
+  }).catch(() => {
+    ElMessage({ type: 'info', message: '已取消', });
+  })
+}
+// 右侧结构化显示点击事件
+const handleStructureClick = (e) => {
+  console.log(e, '点击结构');
+  hightlightEntityInReaderBox(currentClickEntityId.value, e.entityId, true);
+}
+// 右侧结构化显示删除实体
+const deleteStructureEntity = ({entityId, text}) => {
+  ElMessageBox.confirm(
+    `确定要删除实体【${text}】吗?`,'提示',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(() => {
+    deleteEntityById(entityId);
+  }).catch(() => {
+    ElMessage({ type: 'info', message: '已取消', });
+  })
+  // console.log(e, '删除实体');
+}
+// 右侧结构化显示删除关系
+const deleteStructureRelation = ({entityRelationId}) => {
+  ElMessageBox.confirm(
+    `确定要删除关系吗?`,'提示',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(() => {
+    deleteEntityRelation(entityRelationId);
+  }).catch(() => {
+    ElMessage({ type: 'info', message: '已取消', });
+  })
+  // console.log(e, '删除关系');
 }
 // 点击标签开始批量划词
 const startBatchCarver = (callback) => {
@@ -563,6 +575,27 @@ const createEntity = (scribble) => {
       carver.revoke()
   })
 }
+// 删除实体
+const deleteEntityById = (entityId) => {
+  apis.deleteEntity({}, {}, {dynamicSegment: {entityId}}).then(() => {
+    // 1、删除缓存里面的实体
+    entitys = entitys.filter((entity) => {
+      return entity.id !== entityId;
+    });
+    // 2、删除实体相关的关系
+    entityRelations = entityRelations.filter(item => {
+      return !(item.fromId === entityId || item.toId === entityId);
+    })
+    // 3、删除划词中的实体
+    removeMarkById(entityId);
+
+    entityIsolationList();
+    entityStructure();
+    ElMessage({ type: 'success', message: '删除实体成功',});
+  }).catch (error => {
+      console.log('删除实体失败：', error)
+  })
+}
 
 // 创建关系
 const createEntityRelation = (to, from) => {
@@ -586,6 +619,21 @@ const createEntityRelation = (to, from) => {
   })
 }
 
+// 删除关系
+const deleteEntityRelation = (entityRelationId) => {
+  apis.deleteEntityRelation({}, {}, {dynamicSegment: {entityRelationId}}).then(() => {
+    entityRelations = entityRelations.filter(item => {
+      return !item.relationId === entityRelationId;
+    })
+    carver.removePathByExData(entityRelationId)
+    entityIsolationList();
+    entityStructure();
+    ElMessage({ type: 'success', message: '删除关系成功',});
+  }).catch (error => {
+      console.log('删除实体关系组失败：', error)
+  })
+}
+
 // 渲染关系
 const renderEntityRelation = (entityRelationId, fromEntityId, toEntityId, title) => {
   return carver.addPathByExData([
@@ -599,6 +647,22 @@ const renderEntityRelation = (entityRelationId, fromEntityId, toEntityId, title)
           },
       }
   ]);
+}
+
+// 高亮划词区域实体
+const hightlightEntityInReaderBox = (beforeEntityId, afterEntityId, scroll) => {
+  if (beforeEntityId) {
+    carver.cancelHighlightLabelByExData('entity_' + beforeEntityId);
+  }
+  carver.highlightLabelByExData('entity_' + afterEntityId, scroll);
+}
+// 删除划词区实体
+const removeMarkById = (entityId) => {
+  carver.removeLabelByExData('entity_' + entityId);
+  //实体当前实体是高亮的，就要重置
+  if (currentClickEntityId.value == entityId) {
+    currentClickEntityId.value = 0;
+  }
 }
 </script>
 
@@ -693,7 +757,7 @@ const renderEntityRelation = (entityRelationId, fromEntityId, toEntityId, title)
 }
 
 :deep(.el-tab-pane) {
-  height: calc(100vh - 55px);
+  height: calc(100vh - 126px);
   overflow-y: auto;
 }
 
