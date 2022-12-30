@@ -17,12 +17,12 @@ export default {
     },
     // 删除实体 
     deleteEntity: {
-        url: '/mark/deleteEntity',
+        url: '/mark/deleteEntity?entityId=:entityId',
         method: 'delete'
     },
     // 删除关系 
     deleteEntityRelation: {
-        url: '/mark/deleteEntityRelation',
+        url: '/mark/deleteEntityRelation?entityRelationId=:entityRelationId',
         method: 'delete'
     },
 };
