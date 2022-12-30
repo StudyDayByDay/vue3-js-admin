@@ -23,7 +23,7 @@ export default defineConfig({
     },
     proxy: {
       '/dev-api': {
-        target: `http://192.168.0.100:8080`,
+        target: `http://192.168.0.222:8085`,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/dev-api/, ""),
       }
