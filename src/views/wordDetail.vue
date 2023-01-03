@@ -381,8 +381,7 @@ const handleCurrentChange = (e) => {
     carver.text = pages[e-1].text;
     // renderPageIsolationEntity();
     // 渲染划词的部分，需要等待渲染完之后把loading状态置为false
-    Promise.all([renderPageModule(), renderPageEntitys(), renderPageEntityRelation()]).then(() => {
-      renderPageIsolationEntity();
+    Promise.all([renderPageModule(), renderPageEntitys(), renderPageEntityRelation(), renderPageIsolationEntity(), entityStructure()]).then(() => {
       loading.value = false;
     });
   }, 200);
@@ -469,16 +468,23 @@ const renderPageEntityRelation = () => {
 }
 // 渲染右侧实体部分
 const renderPageIsolationEntity = () => {
-  const contentStartOffset = pages[currentPage.value - 1].startOffset;
-  const contentEndOffset = pages[currentPage.value - 1].endOffset;
-  entityIsolationData.length = 0;
-  const isolationEntitys = entityIsolationDataAll.filter(item => {
-    return item.startOffset >= contentStartOffset && item.endOffset <= contentEndOffset
-  })
-  // 这里要处理一下isolationEntitys这些实体数据才能显示出来，要分一下类，用labels来做主键
-  entityIsolationData.push(...entitysToLabels(isolationEntitys));
-  collapseArr.value.length = 0;
-  collapseArr.value = entityIsolationData.map(item => item[0]);
+  return new Promise((resolve, reject) => {
+    try {
+      const contentStartOffset = pages[currentPage.value - 1].startOffset;
+      const contentEndOffset = pages[currentPage.value - 1].endOffset;
+      entityIsolationData.length = 0;
+      const isolationEntitys = entityIsolationDataAll.filter(item => {
+        return item.startOffset >= contentStartOffset && item.endOffset <= contentEndOffset
+      })
+      // 这里要处理一下isolationEntitys这些实体数据才能显示出来，要分一下类，用labels来做主键
+      entityIsolationData.push(...entitysToLabels(isolationEntitys));
+      collapseArr.value.length = 0;
+      collapseArr.value = entityIsolationData.map(item => item[0]);
+      resolve('collapseArr, ok');
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 // 右侧部分实体点击
 const handleClickEntity = (entity) => {
@@ -505,6 +511,7 @@ const handleDeleteEntity = ({text, id}) => {
 const handleStructureClick = (e) => {
   console.log(e, '点击结构');
   hightlightEntityInReaderBox(currentClickEntityId.value, e.entityId, true);
+  currentClickEntityId.value = e.entityId;
 }
 // 右侧结构化显示删除实体
 const deleteStructureEntity = ({entityId, text}) => {
@@ -552,6 +559,7 @@ const startBatchCarver = (callback) => {
 }
 // 创建实体
 const createEntity = (scribble) => {
+  loading.value = true;
   const page = pages[currentPage.value - 1];
   const globalStartOffset = pageOffsetToGlobalOffset(scribble.fromIndex, page);
   const globalEndOffset = pageOffsetToGlobalOffset(scribble.toIndex, page);
@@ -562,21 +570,21 @@ const createEntity = (scribble) => {
       labelId: scribble.labels[0].id,
       mrId,
   }
-  return apis.addEntity(param).then(({data: backEntity}) => {
-      // const backEntity = data.entity;
-      // backEntity.labels = scribble.labels;
+  apis.addEntity(param).then(({data: backEntity}) => {
+    // promise实例的then方法也是返回的一个promise实例，需要用then方法才能接到
       entitys.push(backEntity);
-      renderPageEntitys([backEntity])
-      entityIsolationList();
-      return backEntity;
+      Promise.all([renderPageEntitys([backEntity]), entityIsolationList()]).then(() => {
+        loading.value = false;
+      });
   }).catch (error => {
       console.log('创建实体失败：', error)
       //取消本次划取
-      carver.revoke()
+      carver.revoke();
   })
 }
 // 删除实体
 const deleteEntityById = (entityId) => {
+  loading.value = true;
   apis.deleteEntity({}, {}, {dynamicSegment: {entityId}}).then(() => {
     // 1、删除缓存里面的实体
     entitys = entitys.filter((entity) => {
@@ -589,9 +597,11 @@ const deleteEntityById = (entityId) => {
     // 3、删除划词中的实体
     removeMarkById(entityId);
 
-    entityIsolationList();
-    entityStructure();
-    ElMessage({ type: 'success', message: '删除实体成功',});
+    // 删除完之后的操作
+    Promise.all([entityIsolationList(), entityStructure()]).then(() => {
+      loading.value = false;
+      ElMessage({ type: 'success', message: '删除实体成功',});
+    });
   }).catch (error => {
       console.log('删除实体失败：', error)
   })
@@ -606,12 +616,10 @@ const createEntityRelation = (to, from) => {
       relationId: relationOperate.currentRelation.id,
       mrId,
   }
-  return apis.addEntityRelation(param).then(({data: relation}) => {
+  apis.addEntityRelation(param).then(({data: relation}) => {
     entityRelations.push(relation);
-    entityIsolationList();
-    entityStructure();
-
-    renderEntityRelation(relation.id, relation.fromId, relation.toId, relation.relationVo.title).then(() => {
+    // 接口返回之后的操作
+    Promise.all([entityIsolationList(), entityStructure(), renderEntityRelation(relation.id, relation.fromId, relation.toId, relation.relationVo.title)]).then(() => {
       loading.value = false;
     });
     return relation;
@@ -621,16 +629,18 @@ const createEntityRelation = (to, from) => {
 
 // 删除关系
 const deleteEntityRelation = (entityRelationId) => {
+  loading.value = true;
   apis.deleteEntityRelation({}, {}, {dynamicSegment: {entityRelationId}}).then(() => {
     entityRelations = entityRelations.filter(item => {
       return !item.relationId === entityRelationId;
     })
-    carver.removePathByExData(entityRelationId)
-    entityIsolationList();
-    entityStructure();
-    ElMessage({ type: 'success', message: '删除关系成功',});
+    carver.removePathByExData(entityRelationId);
+    Promise.all([entityIsolationList(), entityStructure()]).then(() => {
+      loading.value = false;
+      ElMessage({ type: 'success', message: '删除关系成功',});
+    });
   }).catch (error => {
-      console.log('删除实体关系组失败：', error)
+      console.log('删除实体关系组失败：', error);
   })
 }
 
