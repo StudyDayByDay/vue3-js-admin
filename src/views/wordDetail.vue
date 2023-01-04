@@ -126,7 +126,7 @@ const structureData = ref([]);
 const defaultProps = {
   children: 'childList',
   label: 'nodeTitle',
-  id: 'entityId'
+  value: 'entityRelationId'
 }
 // ********************************
 // 划词dom
