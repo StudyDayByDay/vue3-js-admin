@@ -54,7 +54,7 @@
               </el-collapse>
             </el-tab-pane>
             <el-tab-pane label="结构化显示" name="structure">
-              <el-tree ref="treeRef" class="filter-tree" :data="structureData" :props="defaultProps" default-expand-all :expand-on-click-node="false" check-on-click-node highlight-current @node-click="handleStructureClick">
+              <!-- <el-tree ref="treeRef" class="filter-tree" :data="structureData" :props="defaultProps" default-expand-all :expand-on-click-node="false" check-on-click-node highlight-current @node-click="handleStructureClick">
                 <template #default="{ node, data }">
                   <el-popover placement="bottom" :width="200" trigger="contextmenu">
                     <template #reference>
@@ -66,7 +66,20 @@
                     </span>
                   </el-popover>
                 </template>
-              </el-tree>
+              </el-tree> -->
+              <el-tree-v2 ref="treeRef" sty class="filter-tree" :data="structureData" :props="defaultProps" :expand-on-click-node="false" check-on-click-node highlight-current @node-click="handleStructureClick">
+                <template #default="{ node, data }">
+                  <el-popover placement="bottom" :width="200" trigger="contextmenu">
+                    <template #reference>
+                      <span>{{ node.label }}</span>
+                    </template>
+                    <span>
+                      <el-button style="margin-right: 5px" text type="danger" size="small" @click="deleteStructureEntity(data)">删除实体</el-button>
+                      <el-button text type="danger" size="small" @click="deleteStructureRelation(data)">删除关系</el-button>
+                    </span>
+                  </el-popover>
+                </template>
+              </el-tree-v2>
             </el-tab-pane>
           </el-tabs>
         </div>
@@ -75,7 +88,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted } from 'vue';
+import { reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { InfoFilled } from '@element-plus/icons-vue'
 import { Carver, globalOffsetToPageOffset, pageOffsetToGlobalOffset, entitysToLabels } from '@/utils';
 import apis from '@/api';
@@ -109,10 +122,11 @@ const entityIsolationData = reactive([]);
 // 右侧点击实体Id
 const currentClickEntityId = ref(0);
 // 右侧结构化数据
-const structureData = reactive([]);
+const structureData = ref([]);
 const defaultProps = {
   children: 'childList',
   label: 'nodeTitle',
+  id: 'entityId'
 }
 // ********************************
 // 划词dom
@@ -144,12 +158,21 @@ onMounted(() => {
   // 先初始化划词实例
   initialize();
   getInitData();
+  // entityStructure();
+});
+
+watch(structureData, (newVal, oldVal) => {
+  console.log(newVal, oldVal, '什么情况呢');
+});
+
+onBeforeUnmount(() => {
+  console.log('我要卸载了');
 });
 
 // **************  获取数据  **************
 // 初始化接口数据
 const getInitData = () => {
-  Promise.all([getPages(), moduleList(), entityList(), entityRelationList(), entityIsolationList(), entityStructure(), relationComboBox(), labelComboBox()]).then(() => {
+  Promise.all([getPages(), moduleList(), entityList(), entityRelationList(), entityIsolationList(), relationComboBox(), labelComboBox()]).then(() => {
     handleCurrentChange(1);
   });
 }
@@ -204,7 +227,6 @@ const entityIsolationList = () => {
     apis.entityIsolationList({mrId}).then(({data}) => {
       entityIsolationDataAll.length = 0;
       entityIsolationDataAll.push(...data);
-      renderPageIsolationEntity();
       resolve('entityIsolationList ok');
     }).catch((error) => {
       reject(error)
@@ -213,21 +235,23 @@ const entityIsolationList = () => {
 }
 // 实体关系结构化显示/获取右侧结构部分
 const entityStructure = () => {
+  console.log(new Date(), '请求开始');
   return new Promise((resolve, reject) => {
     apis.entityStructure({mrId}).then(({data}) => {
-      structureData.length = 0;
-      structureData.push(...data);
+      structureData.value = structureData.value.slice(0, 0);
+      structureData.value.push(...data);
       resolve('entityStructure ok');
+      console.log(new Date(), '请求结束');
     }).catch((error) => {
       reject(error)
     });
+    // resolve(1);
   });
 }
 // 关系下拉框/获取左侧关系部分
 const relationComboBox = () => {
   return new Promise((resolve, reject) => {
     apis.relationComboBox().then(({data}) => {
-      console.log(data, '什么情况');
       relationData.push(...data);
       resolve('relationComboBox ok');
     }).catch((error) => {
@@ -341,7 +365,7 @@ const initialize = () => {
     };
     carver.onLabelClick = async (target, e) => {
       e.stopPropagation()
-      console.log(target, e, 'label');
+      // console.log(target, e, 'label');
       if (target.exData.indexOf('entity') > -1) {
         // 点击的是实体
         const page = pages[currentPage.value - 1];
@@ -367,7 +391,6 @@ const initialize = () => {
         }
         // TODO：点击带有关系的实体会跳转到结构化显示这部分来
         currentClickEntityId.value = Number(target.exData.substr(7));
-        console.log(Number(target.exData.substr(7)), '3333');
       } else if (target.exData.indexOf('time') > -1) {
         // 点击的是模块
       }
@@ -488,7 +511,7 @@ const renderPageIsolationEntity = () => {
 }
 // 右侧部分实体点击
 const handleClickEntity = (entity) => {
-  console.log(entity, '点击实体');
+  // console.log(entity, '点击实体');
   hightlightEntityInReaderBox(currentClickEntityId.value, entity.id, true);
   currentClickEntityId.value = entity.id;
 }
@@ -509,7 +532,7 @@ const handleDeleteEntity = ({text, id}) => {
 }
 // 右侧结构化显示点击事件
 const handleStructureClick = (e) => {
-  console.log(e, '点击结构');
+  // console.log(e, '点击结构');
   hightlightEntityInReaderBox(currentClickEntityId.value, e.entityId, true);
   currentClickEntityId.value = e.entityId;
 }
@@ -549,12 +572,10 @@ const deleteStructureRelation = ({entityRelationId}) => {
 const startBatchCarver = (callback) => {
     carver.cancelSelect()
     carver.select(true, e => {
-        console.log(e)
         if (e.text !== '') {
             callback(e)
         }
-    }).catch(e => {
-        console.log(e)
+    }).catch(() => {
     })
 }
 // 创建实体
