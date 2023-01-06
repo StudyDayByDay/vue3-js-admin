@@ -18,6 +18,9 @@
                 </template>
             </el-table-column>
         </el-table>
+        <div class="button">
+            <el-button type="primary" size="small" @click="toStatic">不调接口的划词插件测试</el-button>
+        </div>
     </div>
 </template>
 
@@ -44,11 +47,22 @@ const getTableData = async () => {
 const signWord = (row) => {
     router.push({path: '/detail', query: {mrId: row.id}});
 }
+
+const toStatic = () => {
+    router.push({name: 'static'});
+}
 </script>
 
 <style lang="scss" scoped>
 .word-list {
     width: 100%;
     height: 100%;
+}
+
+.button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
 }
 </style>

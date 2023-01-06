@@ -88,7 +88,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue';
+import { reactive, ref, onMounted } from 'vue';
 import { InfoFilled } from '@element-plus/icons-vue'
 import { Carver, globalOffsetToPageOffset, pageOffsetToGlobalOffset, entitysToLabels } from '@/utils';
 import apis from '@/api';
@@ -161,14 +161,6 @@ onMounted(() => {
   // entityStructure();
 });
 
-watch(structureData, (newVal, oldVal) => {
-  console.log(newVal, oldVal, '什么情况呢');
-});
-
-onBeforeUnmount(() => {
-  console.log('我要卸载了');
-});
-
 // **************  获取数据  **************
 // 初始化接口数据
 const getInitData = () => {
@@ -235,13 +227,11 @@ const entityIsolationList = () => {
 }
 // 实体关系结构化显示/获取右侧结构部分
 const entityStructure = () => {
-  console.log(new Date(), '请求开始');
   return new Promise((resolve, reject) => {
     apis.entityStructure({mrId}).then(({data}) => {
       structureData.value = structureData.value.slice(0, 0);
       structureData.value.push(...data);
       resolve('entityStructure ok');
-      console.log(new Date(), '请求结束');
     }).catch((error) => {
       reject(error)
     });
@@ -361,7 +351,8 @@ const initialize = () => {
     });
     // carver.text = Mock;
     carver.onPathClick = (target, e) => {
-        console.log(target, e, 'path');
+        console.log(target.exData, e, 'path');
+        deleteEntityRelation(target.exData);
     };
     carver.onLabelClick = async (target, e) => {
       e.stopPropagation()
@@ -404,8 +395,10 @@ const handleCurrentChange = (e) => {
     carver.text = pages[e-1].text;
     // renderPageIsolationEntity();
     // 渲染划词的部分，需要等待渲染完之后把loading状态置为false
-    Promise.all([renderPageModule(), renderPageEntitys(), renderPageEntityRelation(), renderPageIsolationEntity(), entityStructure()]).then(() => {
+    console.log(new Date(), '开始渲染页面');
+    Promise.all([entityStructure(), renderPageModule(), renderPageEntitys(), renderPageEntityRelation(), renderPageIsolationEntity()]).then(() => {
       loading.value = false;
+      console.log(new Date(), '渲染页面结束');
     });
   }, 200);
 }
@@ -562,7 +555,7 @@ const deleteStructureRelation = ({entityRelationId}) => {
       type: 'warning',
     }
   ).then(() => {
-    deleteEntityRelation(entityRelationId);
+    deleteEntityRelation(Number(entityRelationId));
   }).catch(() => {
     ElMessage({ type: 'info', message: '已取消', });
   })
@@ -591,11 +584,13 @@ const createEntity = (scribble) => {
       labelId: scribble.labels[0].id,
       mrId,
   }
+  console.log(new Date(), '开始新建实体');
   apis.addEntity(param).then(({data: backEntity}) => {
     // promise实例的then方法也是返回的一个promise实例，需要用then方法才能接到
       entitys.push(backEntity);
       Promise.all([renderPageEntitys([backEntity]), entityIsolationList()]).then(() => {
         loading.value = false;
+        console.log(new Date(), '新建实体结束');
       });
   }).catch (error => {
       console.log('创建实体失败：', error)
@@ -615,11 +610,9 @@ const deleteEntityById = (entityId) => {
     entityRelations = entityRelations.filter(item => {
       return !(item.fromId === entityId || item.toId === entityId);
     })
-    // 3、删除划词中的实体
-    removeMarkById(entityId);
-
     // 删除完之后的操作
     Promise.all([entityIsolationList(), entityStructure()]).then(() => {
+      removeMarkById(entityId);
       loading.value = false;
       ElMessage({ type: 'success', message: '删除实体成功',});
     });
@@ -655,8 +648,11 @@ const deleteEntityRelation = (entityRelationId) => {
     entityRelations = entityRelations.filter(item => {
       return !item.relationId === entityRelationId;
     })
-    carver.removePathByExData(entityRelationId);
     Promise.all([entityIsolationList(), entityStructure()]).then(() => {
+      console.log(new Date(), '开始删除关系', entityRelationId);
+      carver.removePathByExData(entityRelationId).then(() => {
+        console.log(new Date(), '删除关系结束');
+      });
       loading.value = false;
       ElMessage({ type: 'success', message: '删除关系成功',});
     });
@@ -689,7 +685,10 @@ const hightlightEntityInReaderBox = (beforeEntityId, afterEntityId, scroll) => {
 }
 // 删除划词区实体
 const removeMarkById = (entityId) => {
-  carver.removeLabelByExData('entity_' + entityId);
+  console.log(new Date(), '开始删除实体');
+  carver.removeLabelByExData('entity_' + entityId).then(() => {
+    console.log(new Date(), '删除实体结束');
+  });
   //实体当前实体是高亮的，就要重置
   if (currentClickEntityId.value == entityId) {
     currentClickEntityId.value = 0;
