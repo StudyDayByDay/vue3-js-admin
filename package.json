@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "axios": "^1.2.1",
+    "echarts": "^5.4.1",
     "element-plus": "^2.2.26",
     "pinia": "^2.0.26",
     "qs": "^6.11.0",

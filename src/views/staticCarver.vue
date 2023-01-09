@@ -499,7 +499,7 @@ const addPathOnly = () => {
 // 复杂页面删除关系
 const deletePath = () => {
     console.log(new Date(), '开始删除关系');
-    carver.removePathByExData(88).then(() => {
+    carver.removePathByExData(38).then(() => {
         console.log(new Date(), '删除关系结束');
     });
 }
@@ -520,9 +520,9 @@ const addEntity = () => {
 // 复杂页面删除实体
 const deleteEntity = () => {
     console.log(new Date(), '开始删除实体');
-    carver.removeLabelByExData(88).then(() => {
+    carver.removeLabelByExData(38).then(() => {
         console.log(new Date(), '删除实体结束');
-    });
+    }).catch(() => {});
 }
 
 // 获取全部的labelNode
