@@ -2,7 +2,7 @@
     <div class="carver" v-loading="loading">
       <div class="id">{{mrId}}</div>
       <div class="header">
-        <el-button :color="color" :dark="true" @click="moduleSign">划取子模块</el-button>
+        <!-- <el-button :color="color" :dark="true" @click="moduleSign">划取子模块</el-button> -->
         <el-button :color="color" :dark="true" @click="entityByLabel">划取实体标注标签</el-button>
         <el-button :color="color" :dark="true" @click="labelByPath">标签添加关系</el-button>
         <el-button type="danger" @click="cancelOpertion">取消操作</el-button>
@@ -84,6 +84,7 @@
           </el-tabs>
         </div>
       </div>
+      <contextMenu v-bind="contextMenuProps" v-model:show="contextMenuShow"/>
     </div>
 </template>
 
@@ -93,8 +94,15 @@ import { InfoFilled } from '@element-plus/icons-vue'
 import { Carver, globalOffsetToPageOffset, pageOffsetToGlobalOffset, entitysToLabels } from '@/utils';
 import apis from '@/api';
 import {useRoute} from 'vue-router';
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus';
+import contextMenu from '@/components/contextMenu.vue';
 
+// 右键菜单
+const contextMenuProps = reactive({
+  top: 0,
+  left: 0,
+});
+const contextMenuShow = ref(false);
 // 按钮颜色值
 const color = ref('#2c3e50');
 // loading
@@ -118,7 +126,7 @@ const collapseArr = ref([]);
 // 右侧实体数据
 const entityIsolationDataAll = [];
 // 右侧渲染实体数据
-const entityIsolationData = reactive([]);
+const entityIsolationData = ref([]);
 // 右侧点击实体Id
 const currentClickEntityId = ref(0);
 // 右侧结构化数据
@@ -164,7 +172,7 @@ onMounted(() => {
 // **************  获取数据  **************
 // 初始化接口数据
 const getInitData = () => {
-  Promise.all([getPages(), moduleList(), entityList(), entityRelationList(), entityIsolationList(), relationComboBox(), labelComboBox()]).then(() => {
+  Promise.all([getPages(), moduleList(), entityList(), entityRelationList(), relationComboBox(), labelComboBox()]).then(() => {
     handleCurrentChange(1);
   });
 }
@@ -219,7 +227,10 @@ const entityIsolationList = () => {
     apis.entityIsolationList({mrId}).then(({data}) => {
       entityIsolationDataAll.length = 0;
       entityIsolationDataAll.push(...data);
-      resolve('entityIsolationList ok');
+      renderPageIsolationEntity().then(() => {
+        resolve('entityIsolation ok');
+      }).catch(() => {
+      });
     }).catch((error) => {
       reject(error)
     });
@@ -263,7 +274,7 @@ const labelComboBox = () => {
 
 // **************  按钮操作  **************
 // 子模块手动划取
-const moduleSign = () => {};
+// const moduleSign = () => {};
 // 划取实体标注标签
 const entityByLabel = () => {
   // 如果选择了标签就开启划词，否则进行提示
@@ -354,6 +365,9 @@ const initialize = () => {
         console.log(target.exData, e, 'path');
         deleteEntityRelation(target.exData);
     };
+    carver.onPathMenuClick = (target, e) => {
+        console.log(target, e, 'onPathMenuClick');
+    };
     carver.onLabelClick = async (target, e) => {
       e.stopPropagation()
       // console.log(target, e, 'label');
@@ -385,7 +399,15 @@ const initialize = () => {
       } else if (target.exData.indexOf('time') > -1) {
         // 点击的是模块
       }
-    }
+    };
+    carver.onLabelMenuClick = (target, e) => {
+      console.log(target, e, 'onLabelMenuClick');
+      // left: e.clientX + 25 + 'px',
+      // top: e.clientY - 45 + 'px',
+      contextMenuProps.top = e.clientY - 10;
+      contextMenuProps.left = e.clientX + 25;
+      contextMenuShow.value = true;
+    };
 }
 
 // 分页数据处理
@@ -396,7 +418,7 @@ const handleCurrentChange = (e) => {
     // renderPageIsolationEntity();
     // 渲染划词的部分，需要等待渲染完之后把loading状态置为false
     console.log(new Date(), '开始渲染页面');
-    Promise.all([entityStructure(), renderPageModule(), renderPageEntitys(), renderPageEntityRelation(), renderPageIsolationEntity()]).then(() => {
+    Promise.all([entityIsolationList(), entityStructure(), renderPageModule(), renderPageEntitys(), renderPageEntityRelation()]).then(() => {
       loading.value = false;
       console.log(new Date(), '渲染页面结束');
     });
@@ -488,14 +510,15 @@ const renderPageIsolationEntity = () => {
     try {
       const contentStartOffset = pages[currentPage.value - 1].startOffset;
       const contentEndOffset = pages[currentPage.value - 1].endOffset;
-      entityIsolationData.length = 0;
+      entityIsolationData.value.length = 0;
+      console.log(entityIsolationDataAll, '3333');
       const isolationEntitys = entityIsolationDataAll.filter(item => {
         return item.startOffset >= contentStartOffset && item.endOffset <= contentEndOffset
       })
       // 这里要处理一下isolationEntitys这些实体数据才能显示出来，要分一下类，用labels来做主键
-      entityIsolationData.push(...entitysToLabels(isolationEntitys));
+      entityIsolationData.value = entitysToLabels(isolationEntitys);
       collapseArr.value.length = 0;
-      collapseArr.value = entityIsolationData.map(item => item[0]);
+      collapseArr.value = entityIsolationData.value.map(item => item[0]);
       resolve('collapseArr, ok');
     } catch (error) {
       reject(error);
@@ -698,6 +721,7 @@ const removeMarkById = (entityId) => {
 
 <style lang="scss" scoped>
 .carver {
+  position: relative;
   width: 100%;
   height: 100%;
   padding: 0 20px;
