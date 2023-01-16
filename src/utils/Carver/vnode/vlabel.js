@@ -62,6 +62,10 @@ export class VLabel extends VNode {
       this.$el.onclick = (e) => {
         this.$bus.emit("labelClick", this, e);
       };
+      this.$el.oncontextmenu = (e) => {
+        e.preventDefault();
+        this.$bus.emit("labelMenuClick", this, e);
+      };
     }
     // 标签rect属性
     const labelRectOptions = {

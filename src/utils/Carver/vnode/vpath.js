@@ -71,6 +71,10 @@ export class VPath extends VNode {
         svgText.onclick = (e) => {
           this.$bus.emit("pathClick", this, e);
         };
+        svgText.oncontextmenu = (e) => {
+          e.preventDefault();
+          this.$bus.emit("pathMenuClick", this, e);
+        };
       }
 
       // 创建箭头

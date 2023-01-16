@@ -60,7 +60,9 @@ export class VM {
     this.$bus = new EBus(); // 事件总线
     this.currentSelectList = []; // 当前选中的文本
     this.onLabelClick = null; // 标签点击事件 (target:VLabel;data:MouseEvent;) => viod
+    this.onLabelMenuClick = null; // 标签右键点击事件 (target:VLabel;data:MouseEvent;) => viod
     this.onPathClick = null; // 路径标签点击事件 (target:VPath;data:MouseEvent;) => viod
+    this.onPathMenuClick = null; // 路径标签右键点击事件 (target:VPath;data:MouseEvent;) => viod
 
     this.lineData = {}; // connect时用来存放标签的对象
 
@@ -107,7 +109,7 @@ export class VM {
     });
     this.currentSelectList = []; // 当前选中的文本
     this.$bus.events.forEach((eventItem) => {
-      if (eventItem.name !== "labelClick" && eventItem.name !== "pathClick") {
+      if (eventItem.name !== "labelClick" && eventItem.name !== "pathClick" && eventItem.name !== "labelMenuClick" && eventItem.name !== "pathMenuClick") {
         eventItem.callBacks = [];
       }
     });
@@ -1526,8 +1528,10 @@ export class VM {
       "rowOffsetY",
       "textPositionChange",
       "labelClick",
+      "labelMenuClick",
       "labelStyleChange",
       "pathClick",
+      "pathMenuClick",
       "CollectLabelStatus",
     ]);
 
@@ -1589,6 +1593,16 @@ export class VM {
           return;
         }
         this.onLabelClick(target, data);
+      }
+    });
+
+    // 监听标签右键点击事件
+    this.$bus.addEventListener("labelMenuClick", ({ target, data }) => {
+      if (this.onLabelMenuClick) {
+        if (JSON.stringify(this.lineData) != "{}") {
+          return;
+        }
+        this.onLabelMenuClick(target, data);
       }
     });
 
@@ -1677,6 +1691,13 @@ export class VM {
     this.$bus.addEventListener("pathClick", ({ target, data }) => {
       if (this.onPathClick) {
         this.onPathClick(target, data);
+      }
+    });
+
+    // 监听路径标签右键点击事件
+    this.$bus.addEventListener("pathMenuClick", ({ target, data }) => {
+      if (this.onPathMenuClick) {
+        this.onPathMenuClick(target, data);
       }
     });
 

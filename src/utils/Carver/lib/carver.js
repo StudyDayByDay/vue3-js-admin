@@ -22,10 +22,22 @@ export class Carver {
           this.onLabelClick(target, e);
         }
       };
+      this.onLabelMenuClick = null; // 标签右键点击事件 (target:VLabel;e:MouseEvent;) => viod
+      this.$VM.onLabelMenuClick = (target, e) => {
+        if (this.onLabelMenuClick) {
+          this.onLabelMenuClick(target, e);
+        }
+      };
       this.onPathClick = null; // 路径标签点击事件 (target:VLabel;e:MouseEvent;) => viod
       this.$VM.onPathClick = (target, e) => {
         if (this.onPathClick) {
           this.onPathClick(target, e);
+        }
+      };
+      this.onPathMenuClick = null; // 路径标签点击事件 (target:VLabel;e:MouseEvent;) => viod
+      this.$VM.onPathMenuClick = (target, e) => {
+        if (this.onPathMenuClick) {
+          this.onPathMenuClick(target, e);
         }
       };
 
