@@ -84,7 +84,7 @@
           </el-tabs>
         </div>
       </div>
-      <contextMenu v-bind="contextMenuProps" v-model:show="contextMenuShow"/>
+      <contextMenu v-bind="contextMenuProps" v-model:show="contextMenuShow" v-on="menuEvents"/>
     </div>
 </template>
 
@@ -97,11 +97,6 @@ import {useRoute} from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import contextMenu from '@/components/contextMenu.vue';
 
-// 右键菜单
-const contextMenuProps = reactive({
-  top: 0,
-  left: 0,
-});
 const contextMenuShow = ref(false);
 // 按钮颜色值
 const color = ref('#2c3e50');
@@ -137,8 +132,32 @@ const defaultProps = {
   value: 'entityRelationId'
 }
 // ********************************
+const handleEdit = (e) => {
+  console.log(e, '编辑');
+}
+
+const handleCopy = (e) => {
+  console.log(e, '复制');
+}
+
+const handleDelete = (e) => {
+  console.log(e, '删除');
+}
 // 划词dom
 const carverPanel = ref(null);
+// 右键菜单
+const contextMenuProps = reactive({
+  top: 0,
+  left: 0,
+  el: carverPanel,
+  target: null,
+  type: 'label'
+});
+const menuEvents = {
+  edit: handleEdit,
+  copy: handleCopy,
+  delete: handleDelete,
+};
 // 划词实例
 let carver;
 
@@ -367,6 +386,12 @@ const initialize = () => {
     };
     carver.onPathMenuClick = (target, e) => {
         console.log(target, e, 'onPathMenuClick');
+        contextMenuProps.top = e.clientY - 10;
+        contextMenuProps.left = e.clientX + 30;
+        contextMenuProps.target = target;
+        contextMenuProps.type = 'path';
+        contextMenuShow.value = true;
+        
     };
     carver.onLabelClick = async (target, e) => {
       e.stopPropagation()
@@ -405,7 +430,9 @@ const initialize = () => {
       // left: e.clientX + 25 + 'px',
       // top: e.clientY - 45 + 'px',
       contextMenuProps.top = e.clientY - 10;
-      contextMenuProps.left = e.clientX + 25;
+      contextMenuProps.left = e.clientX + 30;
+      contextMenuProps.target = target;
+      contextMenuProps.type = 'label';
       contextMenuShow.value = true;
     };
 }
@@ -511,7 +538,6 @@ const renderPageIsolationEntity = () => {
       const contentStartOffset = pages[currentPage.value - 1].startOffset;
       const contentEndOffset = pages[currentPage.value - 1].endOffset;
       entityIsolationData.value.length = 0;
-      console.log(entityIsolationDataAll, '3333');
       const isolationEntitys = entityIsolationDataAll.filter(item => {
         return item.startOffset >= contentStartOffset && item.endOffset <= contentEndOffset
       })

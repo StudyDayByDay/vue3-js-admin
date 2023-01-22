@@ -1,29 +1,17 @@
 <template>
     <div class="context-menu" :style="{left: left + 'px', top: top + 'px'}" v-show="show">
-        <div class="context-menu-item">
+        <div class="context-menu-item" v-for="item in options" :key="item.type" @click="handleMenuClick(item.type)">
             <el-icon class="icon">
-                <Edit size="1em"/>
+                <component :is="item.icon" size="1em"></component>
             </el-icon>
-            <span>编辑实体</span>
-        </div>
-        <div class="context-menu-item">
-            <el-icon class="icon">
-                <CopyDocument size="1em"/>
-            </el-icon>
-            <span>复制实体</span>
-        </div>
-        <div class="context-menu-item">
-            <el-icon class="icon">
-                <Delete size="1em"/>
-            </el-icon>
-            <span>删除实体</span>
+            <span>{{item.label}}</span>
         </div>
     </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
-defineProps({
+import { onMounted, watch } from 'vue';
+const props = defineProps({
     top: {
         type: Number,
         required: true
@@ -35,16 +23,50 @@ defineProps({
     show: {
         type: Boolean,
         required: true
+    },
+    el: {
+        type: Object,
+        default: () => {
+            return {}
+        }
+    },
+    target: {
+        type: Object,
+        default: () => {
+            return {}
+        }
+    },
+    type: {
+        type: String,
+        required: true
     }
 })
 
-const emit = defineEmits(['update:show']);
+const emit = defineEmits(['update:show', 'edit', 'copy', 'delete']);
+
+const options = [
+    {label: '编辑', icon: 'Edit', type: 'edit'},
+    {label: '复制', icon: 'CopyDocument', type: 'copy'},
+    {label: '删除', icon: 'Delete', type: 'delete'},
+];
 
 onMounted(() => {
     document.onclick = () => {
         emit('update:show', false);
     }
 });
+
+watch(() => props.el, () => {
+    // 传过来就没有value了， props.el
+    // eslint-disable-next-line vue/no-mutating-props
+    props.el.onscroll = () => {
+        emit('update:show', false);
+    }
+});
+
+const handleMenuClick = (t) => {
+    emit(t, {event: t, type: props.type, target: props.target});
+}
 </script>
 
 <style lang="scss" scoped>
@@ -52,7 +74,7 @@ onMounted(() => {
     position: absolute;
     z-index: 999;
     width: 150px;
-    // background-color: pink;
+    background-color: #fff;
     padding: 4px 0;
     border-radius: 5px;
     box-shadow: 0 3px 6px -4px #0000001f, 0 6px 16px #00000014, 0 9px 28px 8px #0000000d;
@@ -67,9 +89,9 @@ onMounted(() => {
         color: #000000d9;
         cursor: pointer;
         transition: all .3s;
-        background-color: #fff;
+        // background-color: #fff;
         &:hover {
-            background-color: #f5f5f5;
+            background-color: #e6e6e6;
         }
         .icon {
             margin-right: 0.25rem;
