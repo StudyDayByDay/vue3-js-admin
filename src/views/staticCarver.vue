@@ -8,6 +8,7 @@
         <el-button :color="color" :dark="true" @click="multipleEnd">多选结束</el-button>
         <el-button :color="color" :dark="true" @click="multipleRevoke">多选撤销</el-button>
         <el-button :color="color" :dark="true" @click="addSingleLabel">添加单个标签</el-button>
+        <el-button :color="color" :dark="true" @click="editSingleLabel">编辑单个标签</el-button>
         <el-button :color="color" :dark="true" @click="removeSingleLabel">移除单个标签</el-button>
         <el-button :color="color" :dark="true" @click="addExDataLabel">使用exData字段添加位置相同的标签</el-button>
         <el-button :color="color" :dark="true" @click="signLabel">单个划词并添加标签</el-button>
@@ -95,6 +96,8 @@ const carverPanel = ref(null);
 let carver;
 
 const {query: {mrId}} = useRoute();
+
+let vlabel = null;
 
 onMounted(() => {
   initialize();
@@ -275,9 +278,16 @@ const addSingleLabel = async () => {
       textContent: '添加单个标签'
     });
     console.log(res, '标签添加成功');
+    vlabel = res;
   } catch (error) {
     console.log(error, '标签添加失败');
   }
+}
+
+const editSingleLabel = () => {
+  carver.editLabel({ id: vlabel.id }, new Date().getTime(), {
+    backgroundColor: "red",
+  });
 }
 
 // 移除单个标签

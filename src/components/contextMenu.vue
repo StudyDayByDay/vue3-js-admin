@@ -50,22 +50,16 @@ const options = [
     {label: '删除', icon: 'Delete', type: 'delete'},
 ];
 
-onMounted(() => {
-    document.onclick = () => {
-        emit('update:show', false);
-    }
-});
-
-watch(() => props.el, () => {
-    // 传过来就没有value了， props.el
-    // eslint-disable-next-line vue/no-mutating-props
-    props.el.onscroll = () => {
-        emit('update:show', false);
-    }
-});
-
 const handleMenuClick = (t) => {
     emit(t, {event: t, type: props.type, target: props.target});
+}
+
+const onclick = () => {
+    emit('update:show', false);
+}
+
+const onscroll = () => {
+    emit('update:show', false);
 }
 </script>
 

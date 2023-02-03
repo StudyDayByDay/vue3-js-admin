@@ -5,6 +5,11 @@ export default {
         url: '/mark/addEntity',
         method: 'post'
     },
+    // 编辑实体
+    editEntity: {
+        url: '/mark/updateEntityLabelById',
+        method: 'post',
+    },
     // 新增模块 
     addModule: {
         url: '/mark/addModule',

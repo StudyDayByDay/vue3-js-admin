@@ -20,6 +20,11 @@ const router = createRouter({
       path: '/static',
       name: 'static',
       component: () => import('../views/staticCarver.vue')
+    },
+    {
+      path: '/clickMenu',
+      name: 'clickMenu',
+      component: () => import('../views/clickMenu.vue')
     }
   ]
 })
