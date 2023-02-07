@@ -51,7 +51,7 @@ const getTableData = async () => {
 }
 
 const signWord = (row) => {
-    router.push({path: '/detail', query: {mrId: row.id}});
+    router.push({path: '/clickMenu', query: {mrId: row.id}});
 }
 
 const toStatic = () => {

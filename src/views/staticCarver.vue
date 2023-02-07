@@ -599,12 +599,13 @@ const initialize = () => {
     // ***********  连接标签动画  ***********
     try {
       // 还有一个connect方法是：connectByExData
-      const {startLabel, endLabel} = await carver.connect(target);
-      carver.addPath({
-        textContent: '连线动画'+new Date().getTime(),
-        startLabel,
-        endLabel
-      });
+      const res = await carver.connect(target);
+      console.log(res, '43434343');
+      // carver.addPath({
+      //   textContent: '44444433333',
+      //   startLabel: res.startLabel,
+      //   endLabel: res.endLabel
+      // });
     } catch (error) {
       console.log(error, '连线取消');
     }
