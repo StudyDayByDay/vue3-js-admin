@@ -1,6 +1,6 @@
 <template>
     <div class="scribe-menu" :style="{left: left + 'px', top: top + 'px'}" v-show="show" id="scribeMenu">
-        <span>{{ title }}：</span>
+        <span>{{ (type === 'label' ? '实体' : '关系') + '名称' }}：</span>
         <el-cascader
             style="width: 170px;"
             ref="cascader"
@@ -16,7 +16,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, watchEffect, computed } from 'vue';
+import { ref, watch, computed, onMounted } from 'vue';
+import apis from '@/api';
 // import { options } from '@/utils';
 
 const props = defineProps({
@@ -39,26 +40,21 @@ const props = defineProps({
             return {}
         }
     },
-    // 浮窗标题
-    title: {
-        type: String,
-        required: true
-    },
     // 标志：true：点击label，false：划取实体
     click: {
         type: Boolean,
         default: true
-    },
-    // 级联元数据
-    options: {
-        type: Array,
-        default: () => []
     },
     // 划词数据
     target: {
         type: Object,
         default: () => {}
     },
+    // 类型
+    type: {
+        type: String,
+        required: true
+    }
 })
 
 const emit = defineEmits(['update:show', 'change']);
@@ -70,8 +66,12 @@ const top = computed(() => {
     return props.event?.clientY ?? - 10;
 });
 
+// 级联数据集合
+const cascaderData = {};
 // 级联v-model
 const cascaderValue = ref([]);
+// 级联数组
+const options = ref([]);
 // 级联ref
 const cascader = ref(null);
 // 当前选择的node
@@ -80,9 +80,14 @@ let chooseNode = null;
 let optionMap = null;
 
 
-const treeToMap = (options) => {
+onMounted(() => {
+    initCascaderData();
+});
+
+const treeToMap = (type) => {
     // 级联解构转Map结构，每一次调用时需要新增新的数组
     const map = new Map();
+    const options = cascaderData[type];
     const arrayFunc = (options, map, arr = []) => {
         options.forEach((item) => {
             const arrItem = [...arr];
@@ -99,14 +104,12 @@ const treeToMap = (options) => {
     return map;
 }
 
-watchEffect(() => {
-    optionMap = treeToMap(props.options);
-});
-watch(() => props.target, () => {
-    // cascaderValue.value = optionMap.get(newVal.textContent);
-    cascaderValue.value.length = 0;
-    cascaderValue.value.push(...optionMap.get(props.target.textContent));
-});
+const initCascaderData = async () => {
+    const { data: label } = await apis.labelComboBox();
+    const { data: path } = await apis.relationComboBox();
+    cascaderData.label = label;
+    cascaderData.path = path;
+}
 
 const change = () => {
     chooseNode = cascader.value.getCheckedNodes()[0];
@@ -139,22 +142,54 @@ const onclick = (event) => {
 }
 // 响应onkeydown事件
 const onkeydown = ({key}) => {
-    if (key === 'Enter' && props.show && cascader.value.getCheckedNodes().length && !props.click) {
-        setTimeout(() => {
-            emit('update:show', false);
-            emit('change', {
-                labels: [
-                    {id: chooseNode.value, title: chooseNode.label}
-                ],
-                ...props.target
-            });
-        }, 0);
+    if (props.type === 'label') {
+        if (key === 'Enter' && props.show && cascader.value.getCheckedNodes().length && !props.click) {
+            setTimeout(() => {
+                emit('update:show', false);
+                emit('change', {
+                    labels: [
+                        {id: chooseNode.value, title: chooseNode.label}
+                    ],
+                    ...props.target
+                });
+            }, 0);
+        }
+    } else {
+        if (key === 'Enter' && props.show && cascader.value.getCheckedNodes().length && chooseNode) {
+            setTimeout(() => {
+                emit('update:show', false);
+                emit('change', {
+                    labels: [
+                        {id: chooseNode.value, title: chooseNode.label}
+                    ],
+                    ...props.target
+                });
+            }, 0);
+        }
     }
 };
 // 响应onscroll事件
 const onscroll = () => {
     emit('update:show', false);
 };
+
+// 重置
+const reset = () => {
+    cascaderValue.value.length = 0;
+}
+
+defineExpose({ onclick, onkeydown, onscroll, reset });
+// 修改时的监听
+watch([() => props.type, () => props.target], () => {
+    optionMap = treeToMap(props.type);
+    options.value = cascaderData[props.type];
+    const { textContent } = props.target;
+    if (optionMap.has(textContent)) {
+        cascaderValue.value.length = 0;
+        cascaderValue.value.push(...optionMap.get(textContent));
+    }
+});
+
 </script>
 
 <style lang="scss" scoped>
