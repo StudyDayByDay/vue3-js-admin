@@ -10,20 +10,25 @@ export default {
         url: '/mark/updateEntityLabelById',
         method: 'post',
     },
+    // 删除实体 
+    deleteEntity: {
+        url: '/mark/deleteEntity?entityId=:entityId',
+        method: 'delete'
+    },
     // 新增模块 
     addModule: {
         url: '/mark/addModule',
         method: 'post'
     },
-    // 新增实体关系 
+    // 新增关系 
     addEntityRelation: {
         url: '/mark/addEntityRelation',
         method: 'post'
     },
-    // 删除实体 
-    deleteEntity: {
-        url: '/mark/deleteEntity?entityId=:entityId',
-        method: 'delete'
+    // 编辑关系 
+    updateEntityRelation: {
+        url: '/mark/updateEntityRelation',
+        method: 'post'
     },
     // 删除关系 
     deleteEntityRelation: {
