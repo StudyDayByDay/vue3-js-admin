@@ -1,6 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import {Edit, CopyDocument, Delete} from '@element-plus/icons-vue'
+import {Edit, CopyDocument, Delete, Aim} from '@element-plus/icons-vue'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 
@@ -9,7 +9,7 @@ import router from './router'
 
 import './assets/main.css'
 
-const icons = { Edit, CopyDocument, Delete };
+const icons = { Edit, CopyDocument, Delete, Aim };
 const app = createApp(App)
 
 app.use(createPinia())
