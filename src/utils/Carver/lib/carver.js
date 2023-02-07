@@ -477,6 +477,13 @@ export class Carver {
   }
 
   /**
+   * 取消连线
+   */
+  cancelConnect() {
+    return this.$VM.cancelConnect();
+  }
+
+  /**
    * 根据索引值 添加 mark
    * @param {object} mark
    * @param {number} mark.fromIndex

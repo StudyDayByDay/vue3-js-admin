@@ -65,6 +65,7 @@ export class VM {
     this.onPathMenuClick = null; // 路径标签右键点击事件 (target:VPath;data:MouseEvent;) => viod
 
     this.lineData = {}; // connect时用来存放标签的对象
+    this.connectHandler = null;
 
     this.setConfig(options.config);
     this.__onResize();
@@ -827,7 +828,7 @@ export class VM {
         e.preventDefault(); //阻止右键弹窗
         this.$root.removeEventListener("mousemove", this.svgMousemove, true); // 移除事件监听
         document.removeEventListener("contextmenu", contextmenuHandler, true);
-        this.$bus.remove("labelClick", handler); // 移除监听事件
+        this.$bus.remove("labelClick", this.connectHandler); // 移除监听事件
         this.lineData = {};
         if (this.$dottedLineLayer.childNodes.length) {
           this.$dottedLineLayer.removeChild(
@@ -837,10 +838,10 @@ export class VM {
         reject("连线取消。");
       };
 
-      let handler = (target, data) => {
+      this.connectHandler = (target, data) => {
         document.removeEventListener("contextmenu", contextmenuHandler, true);
         this.$root.removeEventListener("mousemove", this.svgMousemove, true); // 移除事件监听
-        this.$bus.remove("labelClick", handler); // 移除监听事件
+        this.$bus.remove("labelClick", this.connectHandler); // 移除监听事件
         this.lineData["endLabel"] = target.target; // 结束标签
         resolve(this.lineData);
         this.lineData = {}; // 在第二次点击之后 将this.lineData 重置为空
@@ -851,8 +852,8 @@ export class VM {
         }
       };
 
-      document.addEventListener("contextmenu", contextmenuHandler, true);
-      this.$bus.addEventListener("labelClick", handler);
+      // document.addEventListener("contextmenu", contextmenuHandler, true);
+      this.$bus.addEventListener("labelClick", this.connectHandler);
     });
 
     // 事件处理函数
@@ -881,7 +882,7 @@ export class VM {
         e.preventDefault(); //阻止右键弹窗
         this.$root.removeEventListener("mousemove", this.svgMousemove, true); // 移除事件监听
         document.removeEventListener("contextmenu", contextmenuHandler, true);
-        this.$bus.remove("labelClick", handler); // 移除监听事件
+        this.$bus.remove("labelClick", this.connectHandler); // 移除监听事件
         this.lineData = {};
         if (this.$dottedLineLayer.childNodes.length) {
           this.$dottedLineLayer.removeChild(
@@ -891,10 +892,10 @@ export class VM {
         reject("连线取消。");
       };
 
-      let handler = (target, data) => {
+      this.connectHandler = (target, data) => {
         document.removeEventListener("contextmenu", contextmenuHandler, true);
         this.$root.removeEventListener("mousemove", this.svgMousemove, true); // 移除事件监听
-        this.$bus.remove("labelClick", handler); // 移除监听事件
+        this.$bus.remove("labelClick", this.connectHandler); // 移除监听事件
         this.lineData["endLabel"] = target.target; // 结束标签
         resolve(this.lineData);
         this.lineData = {}; // 在第二次点击之后 将this.lineData 重置为空
@@ -905,9 +906,20 @@ export class VM {
         }
       };
 
-      document.addEventListener("contextmenu", contextmenuHandler, true);
-      this.$bus.addEventListener("labelClick", handler);
+      // document.addEventListener("contextmenu", contextmenuHandler, true);
+      this.$bus.addEventListener("labelClick", this.connectHandler);
     });
+  }
+
+  cancelConnect() {
+    this.$root.removeEventListener("mousemove", this.svgMousemove, true); // 移除事件监听
+    this.$bus.remove("labelClick", this.connectHandler); // 移除监听事件
+    this.lineData = {};
+    if (this.$dottedLineLayer.childNodes.length) {
+      this.$dottedLineLayer.removeChild(
+        this.$dottedLineLayer.childNodes[0]
+      ); // 虚线节点移除
+    }
   }
 
   /**
