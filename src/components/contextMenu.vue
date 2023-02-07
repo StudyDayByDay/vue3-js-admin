@@ -10,45 +10,65 @@
 </template>
 
 <script setup>
-import { onMounted, watch } from 'vue';
+import { computed } from 'vue';
 const props = defineProps({
-    top: {
-        type: Number,
-        required: true
-    },
-    left: {
-        type: Number,
-        required: true
-    },
+    // 控制是否显示
     show: {
         type: Boolean,
         required: true
     },
+    // 挂载对象
     el: {
         type: Object,
         default: () => {
             return {}
         }
     },
+    // 事件原对象
+    event: {
+        type: Object,
+        default: () => {
+            return {}
+        }
+    },
+    // 划词数据
     target: {
         type: Object,
         default: () => {
             return {}
         }
     },
+    // 类型
     type: {
         type: String,
         required: true
     }
 })
 
-const emit = defineEmits(['update:show', 'edit', 'copy', 'delete']);
+const emit = defineEmits(['update:show', 'edit', 'copy', 'delete', 'mapping']);
 
-const options = [
-    {label: '编辑', icon: 'Edit', type: 'edit'},
-    {label: '复制', icon: 'CopyDocument', type: 'copy'},
-    {label: '删除', icon: 'Delete', type: 'delete'},
-];
+const left = computed(() => {
+    return props.event?.clientX ?? 0 + 30;
+});
+const top = computed(() => {
+    return props.event?.clientY ?? - 10;
+});
+
+const optionsObj = {
+    label: [
+        // {label: '编辑', icon: 'Edit', type: 'edit'},
+        // {label: '复制', icon: 'CopyDocument', type: 'copy'},
+        { label: '映射', icon: 'Aim', type: 'mapping' },
+        { label: '删除', icon: 'Delete', type: 'delete' },
+    ],
+    path: [
+        { label: '删除', icon: 'Delete', type: 'delete' }, 
+    ]
+};
+
+const options = computed(() => {
+    return optionsObj[props.type];
+});
 
 const handleMenuClick = (t) => {
     emit(t, {event: t, type: props.type, target: props.target});
@@ -61,6 +81,8 @@ const onclick = () => {
 const onscroll = () => {
     emit('update:show', false);
 }
+
+defineExpose({ onclick, onscroll });
 </script>
 
 <style lang="scss" scoped>
