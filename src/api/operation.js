@@ -35,4 +35,9 @@ export default {
         url: '/mark/deleteEntityRelation?entityRelationId=:entityRelationId',
         method: 'delete'
     },
+    // 手动建立映射
+    buildEntityMap: {
+        url: '/mark/buildEntityMap',
+        method: 'post'
+    },
 };
