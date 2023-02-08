@@ -2,6 +2,7 @@
     <div class="scribe-menu" :style="{left: left + 'px', top: top + 'px'}" v-show="show" id="scribeMenu">
         <span>{{ (type === 'label' ? '实体' : '关系') + '名称' }}：</span>
         <el-cascader
+            v-if="show"
             style="width: 170px;"
             ref="cascader"
             placeholder="支持搜索"

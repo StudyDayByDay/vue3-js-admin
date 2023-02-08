@@ -28,7 +28,7 @@
             @change="scribeTransferChange"
         />
         <!-- 映射弹框 -->
-        <mapDialog v-model="visible"></mapDialog>
+        <mapDialog v-model="visible" :entity="mapEntity" @commit="mapCommit"></mapDialog>
     </div>
 </template>
 
@@ -41,7 +41,7 @@ import colorType from '@/components/colorType.vue';
 import contextMenu from '@/components/contextMenu.vue';
 import scribeMenu from '@/components/scribeMenu.vue';
 import mapDialog from '../components/mapDialog.vue';
-// import { ElMessageBox, ElMessage } from 'element-plus';
+import { ElMessage } from 'element-plus';
 
 // 全局loading
 const loading = ref(true);
@@ -96,6 +96,7 @@ const scribeProps = reactive({
 const mousePosition  = {};
 
 const visible = ref(false);
+let mapEntity = reactive({});
 
 onMounted(() => {
   initialize();
@@ -108,6 +109,7 @@ onMounted(() => {
   }
   document.onkeydown = (e) => {
     scribeRef.value.onkeydown(e);
+    ctrlZ(e);
   }
   // carverPanel.value.onscroll = (e) => {
   //   contextRef.value.onscroll(e);
@@ -142,6 +144,7 @@ const handleScroll = () => {
     funStorePos();
     contextRef.value.onscroll(e);
     scribeRef.value.onscroll(e);
+    carverBtn.value && carver.revoke();
   });
 
   // 尺寸变化时候实时修正滚动位置，使最上边缘元素永远在上边缘
@@ -229,11 +232,15 @@ const initialize = () => {
   };
   carver.onLabelMenuClick = (target, e) => {
     console.log(target, e, 'onLabelMenuClick');
+    const { exData, textContent } = target;
+    if (textContent === '子模块') return;
     contextProps.event = e;
     contextProps.target = target;
     contextProps.type = 'label';
     contextShow.value = true;
     scribeShow.value = false;
+    mapEntity.label = textContent;
+    mapEntity.id = Number(exData.substr(7));
   };
 
   document.onmousemove = ({clientX, clientY}) => {
@@ -298,6 +305,7 @@ const handleTransfer = () => {
   if(carverBtn.value) {
     // 结束划词操作
     carver.cancelSelect();
+    scribeShow.value = false;
     scribeRef.value.reset();
   } else {
     // 开启划词操作
@@ -426,7 +434,6 @@ const renderPageEntityRelation = () => {
 
 // 创建实体
 const createEntity = (scribble) => {
-  loading.value = true;
   const page = pages[currentPage.value - 1];
   const globalStartOffset = pageOffsetToGlobalOffset(scribble.fromIndex, page);
   const globalEndOffset = pageOffsetToGlobalOffset(scribble.toIndex, page);
@@ -437,14 +444,10 @@ const createEntity = (scribble) => {
       labelId: scribble.labels[0].id,
       mrId,
   }
-  console.log(new Date(), '开始新建实体');
   apis.addEntity(param).then(({data: backEntity}) => {
     // promise实例的then方法也是返回的一个promise实例，需要用then方法才能接到
       entitys.push(backEntity);
-      Promise.all([renderPageEntitys([backEntity])]).then(() => {
-        loading.value = false;
-        console.log(new Date(), '新建实体结束');
-      });
+      renderPageEntitys([backEntity])
   }).catch (error => {
       console.log('创建实体失败：', error)
       //取消本次划取
@@ -581,6 +584,23 @@ const scribeTransferChange = (e) => {
       editRelationInCache(id, relationId, title);
       // 调用工具修改path
       carver.editPathByExData(id, title, { borderColor: 'red' });
+    }
+  }
+}
+// 实体映射操作
+const mapCommit = async (e) => {
+  console.log(e);
+  await apis.buildEntityMap({mrId, ...e});
+  ElMessage({
+    message: '建立映射成功',
+    type: 'success',
+  })
+}
+const ctrlZ = (e) => {
+  if (e.ctrlKey == true && e.keyCode == 90) {//Ctrl+S
+    if (carverBtn.value | connectBtn.value) {
+      scribeShow.value = false;
+      carver.revoke();
     }
   }
 }
