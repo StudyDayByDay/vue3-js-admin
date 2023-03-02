@@ -1,18 +1,27 @@
 <template>
     <div class="scribe-menu" :style="{left: left + 'px', top: top + 'px'}" v-show="show" id="scribeMenu">
-        <span>{{ (type === 'label' ? '实体' : '关系') + '名称' }}：</span>
-        <el-cascader
-            v-if="show"
-            style="width: 170px;"
-            ref="cascader"
-            placeholder="支持搜索"
-            :options="options"
-            :props="{ expandTrigger: 'hover' }"
-            :show-all-levels="false"
-            filterable
-            v-model="cascaderValue"
-            @change="change">
-        </el-cascader>
+        <div class="scribe-menu-select">
+            <span>{{ (type === 'label' ? '实体' : '关系') + '名称' }}：</span>
+            <el-cascader
+                v-if="show"
+                style="width: 170px;"
+                ref="cascader"
+                placeholder="支持搜索"
+                :options="options"
+                :props="{ expandTrigger: 'hover' }"
+                :show-all-levels="false"
+                filterable
+                v-model="cascaderValue"
+                @change="change">
+            </el-cascader>
+        </div>
+        <div class="scribe-menu-line" v-show="copyShow"></div>
+        <div class="scribe-menu-copy" v-show="copyShow" @click="handleCopy">
+            <el-icon class="icon">
+                <component :is="'CopyDocument'" size="1em"></component>
+            </el-icon>
+            <span>以划取部分为模板进行复制</span>
+        </div>
     </div>
 </template>
 
@@ -34,12 +43,15 @@ const props = defineProps({
             return {}
         }
     },
-    // 事件原对象
-    event: {
-        type: Object,
-        default: () => {
-            return {}
-        }
+    // 鼠标x
+    clientX: {
+        type: Number,
+        default: 0
+    },
+    // 鼠标y
+    clientY: {
+        type: Number,
+        default: 0
     },
     // 标志：true：点击label，false：划取实体
     click: {
@@ -55,16 +67,26 @@ const props = defineProps({
     type: {
         type: String,
         required: true
+    },
+    // 是否显示复制模块
+    copyShow: {
+        type: Boolean,
+        required: true
+    },
+    // 是否点击了复制
+    copy: {
+        type: Boolean,
+        required: true
     }
 })
 
-const emit = defineEmits(['update:show', 'change']);
+const emit = defineEmits(['update:show', 'change', 'update:copy', 'copy']);
 
 const left = computed(() => {
-    return props.event?.clientX ?? 0 + 30;
+    return props.clientX + 30;
 });
 const top = computed(() => {
-    return props.event?.clientY ?? - 10;
+    return props.clientY - 10;
 });
 
 // 级联数据集合
@@ -143,6 +165,7 @@ const onclick = (event) => {
 }
 // 响应onkeydown事件
 const onkeydown = ({key}) => {
+    chooseNode = cascader.value.getCheckedNodes()[0];
     if (props.type === 'label') {
         if (key === 'Enter' && props.show && cascader.value.getCheckedNodes().length && !props.click) {
             setTimeout(() => {
@@ -177,6 +200,7 @@ const onscroll = () => {
 // 重置
 const reset = () => {
     cascaderValue.value.length = 0;
+    emit('update:copy', false);
 }
 
 defineExpose({ onclick, onkeydown, onscroll, reset });
@@ -191,14 +215,16 @@ watch([() => props.type, () => props.target], () => {
     }
 });
 
+const handleCopy = () => {
+    emit('update:copy', true);
+    emit('copy');
+}
+
 </script>
 
 <style lang="scss" scoped>
 .scribe-menu {
     position: absolute;
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
     width: 270px;
     font-size: 14px;
     color: #000000d9;
@@ -207,27 +233,22 @@ watch([() => props.type, () => props.target], () => {
     border-radius: 5px;
     // box-shadow: 0 3px 6px -4px #0000001f, 0 6px 16px #00000014, 0 9px 28px 8px #0000000d;
     box-shadow: 0 1px 2px -2px #00000029, 0 3px 6px #0000001f, 0 5px 12px 4px #00000017;
-    &-title {
-        height: 20px;
-        line-height: 20px;
-        background-color: pink;
-    }
-
-    &-content {
-        height: 40px;
-        background-color: red;
-    }
-    &-item {
-        clear: both;
-        height: 32px;
+    &-select {
         display: flex;
-        // justify-content: space-between;
+        justify-content: space-around;
         align-items: center;
-        padding: 5px 12px;
-        font-size: 14px;
-        color: #000000d9;
+    }
+    &-line {
+        margin-top: 5px;
+        border-top: 1px dashed #ccc;
+    }
+    &-copy {
+        display: flex;
+        align-items: center;
+        margin-top: 5px;
         cursor: pointer;
         transition: all .3s;
+        border-radius: 4px;
         // background-color: #fff;
         &:hover {
             background-color: #e6e6e6;

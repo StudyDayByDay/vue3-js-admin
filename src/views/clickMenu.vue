@@ -10,7 +10,7 @@
         </div>
         <div class="clickMenu-content" id="carver" ref="carverPanel"></div>
         <div class="clickMenu-bottom">
-          <el-pagination background layout="prev, pager, next" v-model:current-page="currentPage" :page-count="pageCount" @current-change="handleCurrentChange"/>
+          <el-pagination background layout="prev, pager, next" v-model:current-page="currentPage" :page-count="pageCount" :disabled="carverBtn || connectBtn" @current-change="handleCurrentChange"/>
         </div>
         <!-- 划词右键菜单 -->
         <contextMenu
@@ -25,10 +25,14 @@
             ref="scribeRef"
             v-bind="scribeProps"
             v-model:show="scribeShow"
+            v-model:copy="scribeCopy"
             @change="scribeTransferChange"
+            @copy="clickCopy"
         />
         <!-- 映射弹框 -->
         <mapDialog v-model="visible" :entity="mapEntity" @commit="mapCommit"></mapDialog>
+        <!-- 复制弹框 -->
+        <copyDialog v-model="copyVisible" v-bind="copyShowData"></copyDialog>
     </div>
 </template>
 
@@ -41,13 +45,14 @@ import colorType from '@/components/colorType.vue';
 import contextMenu from '@/components/contextMenu.vue';
 import scribeMenu from '@/components/scribeMenu.vue';
 import mapDialog from '../components/mapDialog.vue';
+import copyDialog from '../components/copyDialog.vue';
 import { ElMessage } from 'element-plus';
 
 // 全局loading
 const loading = ref(true);
 
 // 头部数据*****************
-const title = ref('徐景全出院记录.dox');
+const title = ref('徐景全出院记录.dox（测试版写死的标题）');
 // 为true代表在划词状态
 const carverBtn = ref(false);
 // 为true代表在连线状态
@@ -64,6 +69,11 @@ const moduleData = [];
 let entitys = [];
 // 关系数据
 let entityRelations = [];
+// 复制模版数据
+let copyTemplate = {
+  text: '',
+  entitys: []
+};
 
 // 底部数据*****************
 // 分页数据
@@ -85,18 +95,32 @@ const contextProps = reactive({
 
 const scribeRef = ref(null);
 const scribeShow = ref(false);
+const scribeCopy = ref(false);
 const scribeProps = reactive({
-  event: {},
+  clientX: 0,
+  clientY: 0,
   el: carverPanel,
   type: '',
   click: true,
   target: {},
+  copyShow: false,
 });
 
 const mousePosition  = {};
 
+// 映射弹框
 const visible = ref(false);
 let mapEntity = reactive({});
+
+// 复制弹框
+const copyVisible = ref(false);
+const copyShowData = reactive({
+  templateText: '',
+  scribbleText: '',
+  entitys: [],
+  relations: []
+});
+
 
 onMounted(() => {
   initialize();
@@ -198,7 +222,8 @@ const initialize = () => {
     console.log(target, e, 'path');
     e.stopPropagation();
     scribeProps.type = 'path';
-    scribeProps.event = e;
+    scribeProps.clientX = e.clientX;
+    scribeProps.clientY = e.clientY;
     scribeProps.target = target;
     scribeProps.click = true;
     contextShow.value = false;
@@ -224,7 +249,8 @@ const initialize = () => {
       // 点击label操作
       scribeProps.type = 'label';
     }
-    scribeProps.event = e;
+    scribeProps.clientX = e.clientX;
+    scribeProps.clientY = e.clientY;
     scribeProps.target = target;
     scribeProps.click = true;
     contextShow.value = false;
@@ -301,6 +327,439 @@ const entityRelationList = () => {
   });
 }
 // 划词操作方法 &&&&&&&&&&&&&&&&&&&
+// 复制操作
+const handleCopy = (scribble) => {
+  console.log('复制操作');
+  //模板实体
+  let entitysInTemplate = copyTemplate.entitys,
+  // 模版文本
+  templateText = copyTemplate.text,
+  // 划词的文本
+  scribbleText = scribble.text;
+  const page = pages[currentPage.value - 1];
+  // 划词的开始位置
+  const scribbleStart = pageOffsetToGlobalOffset(scribble.fromIndex, page);
+  // 划词的结束位置
+  const scribbleEnd = pageOffsetToGlobalOffset(scribble.toIndex, page);
+  //排序
+  entitysInTemplate.sort((a, b) => {
+      if (a.startOffset == b.startOffset) {
+          return a.id - b.id
+      }
+      return a.startOffset - b.startOffset
+  })
+
+  //是否有关系（这里指的是模版实体当中是否有连线，仅考虑连线在这些实体之中，意思是连线的开头和结尾都在实体里面，也就是是一根完整的线。类似于交集的感觉）
+  const hasRelation = entityRelations.some(entityRelation => {
+      let findFrom = false, findTo = false
+      for (let i = 0; i < entitysInTemplate.length; i++) {
+          if (!findFrom && entityRelation.fromId == entitysInTemplate[i].id) {
+              findFrom = true
+          }
+
+          if (!findTo && entityRelation.toId == entitysInTemplate[i].id) {
+              findTo = true
+          }
+          if (findFrom && findTo) {
+              return true
+          }
+      }
+      return false
+  })
+
+  //复制错误
+  const copyError = function(msg){
+    ElMessage.error(msg);
+    carver.revoke();
+  }
+
+  let newEntitys = [],  //复制识别到的实体
+      newEntityRelations = [],//复制识别到的实体关系
+      offset = 0;
+
+  switch (entitysInTemplate.length) {
+      case 1:
+          /**
+            * 形如 xxa、b、c，已知划取了实体a（不包含xx,xx指任意字符）
+            * 并选择了xxa作为模板，然后划取a、b、c复制
+            * 以标点符号进行拆分b和c，注意不拆分括号中的标点
+            *  (?<![（(][^）)]*)[,，、; ](?![^（(]*）\))/
+            */
+          scribbleText.split(/(?<![（(][^）)]*)[,，、; ](?![^（(]*）\))/).forEach(item => {
+              // 代表划词有选中了文本
+              if (item.length > 0) {
+                  newEntitys.push({
+                      text: item,
+                      startOffset: scribbleStart + offset,
+                      endOffset: scribbleStart + offset + item.length - 1,
+                      labelId: entitysInTemplate[0].labels[0].id,
+                      labelText: entitysInTemplate[0].labels[0].title
+                  })
+              }
+
+              offset += item.length + 1
+          })
+
+          //如果第一个实体和复制的模板相同，就丢掉
+          //比如复制实体a，然后划取了a、b、c
+          if (newEntitys.length > 0 && newEntitys[0].text == templateText) {
+              newEntitys.shift()
+          }
+          break
+      case 2:
+          //形如ab、ac、ad，以ab为模板复制
+          // eslint-disable-next-line no-case-declarations
+          let start = scribbleText.indexOf(entitysInTemplate[0].text, -1);
+          // 新划词的部分包含模版的第一个实体内容并且两个实体是先后连接关系
+          if (start > -1 && parseInt(entitysInTemplate[0].endOffset) + 1 == entitysInTemplate[1].startOffset) {
+              const entity1 = {
+                  text: entitysInTemplate[0].text,
+                  startOffset: parseInt(scribbleStart) + start,
+                  endOffset: parseInt(scribbleStart) + start + entitysInTemplate[0].text.length - 1,
+                  labelId: entitysInTemplate[0].labels[0].id,
+                  labelText: entitysInTemplate[0].labels[0].title,
+              }
+
+              const entity2Text = scribbleText.substr(entitysInTemplate[0].text.length)
+              const entity2 = {
+                  text: entity2Text,
+                  startOffset: parseInt(scribbleStart) + start + entitysInTemplate[0].text.length,
+                  endOffset: parseInt(scribbleStart) + start + entitysInTemplate[0].text.length + entity2Text.length - 1,
+                  labelId: entitysInTemplate[1].labels[0].id,
+                  labelText: entitysInTemplate[1].labels[0].title,
+              }
+
+              newEntitys.push(entity1, entity2);
+          } else {
+              // 两个不是挨着的情况
+              //如果第二个实体是“+”或者“-”，则以“+”或者“-”号分割，注意这里加减号认为是一样的
+              if (entitysInTemplate[1].text === '+' || entitysInTemplate[1].text === '-') {
+                  let index = scribbleText.indexOf('+', -1)
+                  if (index === -1) {
+                      index = scribbleText.indexOf('-', -1)
+                  }
+
+                  if (index > -1) {
+                      const entity1Text = scribbleText.substr(0, index)
+                      const entity1 = {
+                          text: entity1Text,
+                          startOffset: parseInt(scribbleStart),
+                          endOffset: parseInt(scribbleStart) + index - 1,
+                          labelId: entitysInTemplate[0].labels[0].id,
+                          labelText: entitysInTemplate[0].labels[0].title,
+                      }
+
+                      const entity2Text = scribbleText.substr(index)
+                      const entity2 = {
+                          text: entity2Text,
+                          startOffset: parseInt(scribbleStart) + index,
+                          endOffset: parseInt(scribbleEnd),
+                          labelId: entitysInTemplate[1].labels[0].id,
+                          labelText: entitysInTemplate[1].labels[0].title,
+                      }
+
+                      newEntitys.push(entity1, entity2)
+                  }
+              } else {
+                  // 第二个实体不是“+”或者“-”的情况
+                  //无法以加减号区分，则以括号分割
+                  if (/^(.*)[(（].*[)）]$/.test(entitysInTemplate[1].text)) {
+                      const matches = /^(.*)([(（].*[)）])$/.exec(scribble.text)
+                      if (matches) {
+                          const entity1Text = matches[1],
+                              entity2Text = matches[2]
+
+                          const entity1 = {
+                              text: entity1Text,
+                              startOffset: parseInt(scribbleStart),
+                              endOffset: parseInt(scribbleStart) + entity1Text.length - 1,
+                              labelId: entitysInTemplate[0].labels[0].id,
+                              labelText: entitysInTemplate[0].labels[0].title,
+                          }
+
+                          const entity2 = {
+                              text: entity2Text,
+                              startOffset: parseInt(scribbleStart) + entity1Text.length,
+                              endOffset: parseInt(scribbleEnd),
+                              labelId: entitysInTemplate[1].labels[0].id,
+                              labelText: entitysInTemplate[1].labels[0].title,
+                          }
+
+                          newEntitys.push(entity1, entity2)
+                      }
+                  }
+
+              }
+          }
+          // 为什么写在这里
+          if (newEntitys.length == 2) {
+              //如果ab建立了关系
+              if (hasRelation) {
+                  let reationId = 0
+                  // 遍历关系数组
+                  for (let i = 0; i < entityRelations.length; i++) {
+                      const entityRelation = entityRelations[i]
+                      //关系有正向、反向
+                      if (entityRelation.fromId == entitysInTemplate[0].id && entityRelation.toId == entitysInTemplate[1].id) {
+                          reationId = entityRelation.relationId
+                          //from、to表示识别到的实体数组的下表索引
+                          newEntityRelations.push({
+                              from: 0,
+                              to: 1,
+                              relationId: reationId,
+                              relationText: entityRelation.relationVo.title
+                          })
+                          break
+                      }
+
+                      if (entityRelation.fromId == entitysInTemplate[1].id && entityRelation.toId == entitysInTemplate[0].id) {
+                          reationId = entityRelation.relationId
+                          newEntityRelations.push({
+                              from: 1,
+                              to: 0,
+                              relationId: reationId,
+                              relationText: entityRelation.relationVo.title
+                          })
+                          break
+                      }
+                  }
+              }
+              break
+          } else {
+              newEntitys = []
+          }
+          break;
+
+      default:
+          /**
+            * 注意注意注意：如果不满足case 2的格式，会尝试执行default
+            * 1.以实体之间的分割符去拆分。形如：美罗华、600mg、d0，分别建立了3个实体，并创建了关系，
+            * 此时以美罗华、600mg、d0作为模板去寻找xxx、xxx、xxx，并创建实体与关系
+            *
+            * 2.第一种情况不满足，则尝试正则匹配，
+            */
+
+
+          // eslint-disable-next-line no-case-declarations
+          const lasttry = function (entitysInTemplate, scribble) {
+              let entitysInScribble = []
+              let scribbleText = scribble.text
+              let offset = 0
+              entitysInTemplate.forEach(entity => {
+                  // 匹配实体的text里是否有中文
+                  if (/^[\u4e00-\u9fa5]+$/.test(entity.text)) {
+                      // 划取的部分是否有中文
+                      const result = /^[\u4e00-\u9fa5]+/.exec(scribbleText);
+                      if (result && result.length > 0) {
+                          const start = scribbleText.indexOf(result[0]);
+                          entitysInScribble.push({
+                              text: result[0],
+                              startOffset: scribbleStart + offset + start,
+                              endOffset: scribbleStart + offset + start + result[0].length - 1,
+                              labelId: entity.labels[0].id,
+                          });
+                          scribbleText = scribbleText.substr(start + result[0].length);
+                          offset += start + result[0].length;
+                      }
+                  } else {
+                      const result = /[\w-()（）+-]+/.exec(scribbleText);
+                      if (result && result.length > 0) {
+                          const start = scribbleText.indexOf(result[0]);
+                          entitysInScribble.push({
+                              text: result[0],
+                              startOffset: scribbleStart + offset + start,
+                              endOffset: scribbleStart + offset + start + result[0].length - 1,
+                              labelId: entity.labels[0].id,
+                          });
+                          scribbleText = scribbleText.substr(start + result[0].length);
+                          offset += start + result[0].length;
+                      }
+                  }
+              })
+              return entitysInScribble
+          }
+
+          // eslint-disable-next-line no-case-declarations
+          let wrong = false
+          // eslint-disable-next-line no-case-declarations
+          let seperators = []
+          // 把第一次模版中实体之间的内容当做分隔符
+          entitysInTemplate.forEach(entity => {
+              let start = templateText.indexOf(entity.text)
+
+              const seperator = templateText.substr(offset, start - offset)
+              // 偏移量
+              offset = start + entity.text.length
+              // 识别到seperator有值就放进去
+              if (seperator.length > 0) {
+                  seperators.push(seperator)
+              }
+          })
+
+
+          //当实体之间没有分隔符的时候(紧挨着)，两者不等，这种情况无法复制
+          // 写得太烂了，只有一种情况能够走通，就是左右实体的两边都贴着边，还有其他的三种没贴边的情况都被毙掉了，有待商榷
+          if (seperators.length + 1 != entitysInTemplate.length) {
+              wrong = true
+          }
+
+          // 分隔符偏移量
+          // eslint-disable-next-line no-case-declarations
+          let seperatorOffset = 0
+          for (let i = 0; !wrong && i < seperators.length; i++) {
+              let index = scribbleText.indexOf(seperators[i], seperatorOffset)
+              //没有对应的分隔符
+              if (index == -1) {
+                  wrong = true
+                  break
+              }
+
+              //以分隔符去寻找实体
+              const text = scribbleText.substr(seperatorOffset, index - seperatorOffset)
+              newEntitys.push({
+                  text: text,
+                  startOffset: parseInt(scribbleStart) + seperatorOffset,
+                  endOffset: parseInt(scribbleStart) + seperatorOffset + text.length - 1,
+                  labelId: entitysInTemplate[i].labels[0].id,
+                  labelText: entitysInTemplate[i].labels[0].title
+              })
+
+              // TODO：这里有问题
+              // 这里不该是index + 1， 应该是index + seperators[i].length - 1，这里-1还是不减要实际处理一下才知道
+              seperatorOffset = index + 1
+          }
+          // 假如顺利走完了
+          if (!wrong) {
+              //实体会比分隔符多一个，所以这里要再添加一个实体
+              const last = scribbleText.substr(seperatorOffset)
+              newEntitys.push({
+                  text: last,
+                  startOffset: parseInt(scribbleStart) + seperatorOffset,
+                  endOffset: parseInt(scribbleStart) + seperatorOffset + last.length - 1,
+                  labelId: entitysInTemplate[entitysInTemplate.length - 1].labels[0].id,
+                  labelText: entitysInTemplate[entitysInTemplate.length - 1].labels[0].title
+              })
+          } else {
+              newEntitys = lasttry(entitysInTemplate, scribble)
+          }
+
+          if (newEntitys.length != entitysInTemplate.length) {
+              copyError('无效复制模式')
+              return
+          }
+
+          //寻找关系
+          if (hasRelation) {
+              entityRelations.forEach(entityRelation => {
+                  let findFrom = false, findTo = false,
+                      fromIndex, toIndex
+
+                  for (let i = 0; i < entitysInTemplate.length; i++) {
+                      if (!findFrom && entityRelation.fromId == entitysInTemplate[i].id) {
+                          findFrom = true
+                          fromIndex = i
+                      }
+
+                      if (!findTo && entityRelation.toId == entitysInTemplate[i].id) {
+                          findTo = true
+                          toIndex = i
+                      }
+
+                      if (findFrom && findTo) {
+                          newEntityRelations.push({
+                              from: fromIndex,
+                              to: toIndex,
+                              relationId: entityRelation.relationId,
+                              relationText: entityRelation.relationVo.title
+                          })
+
+                          break
+                      }
+                  }
+              })
+          }
+
+          break
+  }
+
+
+  console.log('template:', templateText);
+  console.log('entitysInTemplate:', entitysInTemplate);
+  console.log('newEntitys:', newEntitys);
+  console.log('entityRelations:', newEntityRelations);
+
+  // 处理用于展示的数据
+  copyShowData.templateText = templateText;
+  copyShowData.scribbleText = scribbleText;
+  copyShowData.entitys = newEntitys.map(entity => {
+    return {
+      text: entity.text,
+      label: entity.labelText
+    };
+  });
+  copyShowData.relations = newEntityRelations.map((newEntityRelation) => {
+    const {text: startText, labelText: startLabel} = newEntitys[newEntityRelation.from],
+    {text: endText, labelText: endLabel} = newEntitys[newEntityRelation.to];
+    return {
+      startText,
+      startLabel,
+      relationText: newEntityRelation.relationText,
+      endText,
+      endLabel,
+    };
+  });
+  // 打开dialog
+  copyVisible.value = true;
+};
+// 菜单点击复制
+const clickCopy = () => {
+  scribeShow.value = false;
+}
+// 划词操作
+const carverSelect = ({fromIndex, toIndex, text, eventIndex, fromNode, toNode}) => {
+  console.log(fromIndex, toIndex, text, eventIndex, fromNode, toNode);
+  if (!text) return;
+  const page = pages[currentPage.value - 1];
+  const scribbleStart = pageOffsetToGlobalOffset(fromIndex, page);
+  const scribbleEnd = pageOffsetToGlobalOffset(toIndex, page);
+  const {clientX, clientY} = mousePosition;
+  scribeProps.clientX = clientX;
+  scribeProps.clientY = clientY;
+  scribeProps.target = {fromIndex, toIndex, text, eventIndex, fromNode, toNode};
+  scribeProps.click = false;
+  scribeProps.type = 'label';
+  // 如果划取的内容里面有实体就展示复制按钮
+  scribeProps.copyShow = entitys.some(entity => !(entity.startOffset > scribbleEnd || entity.endOffset < scribbleStart));
+  if (scribeCopy.value) {
+    // 代表点击了复制按钮，执行handleCopy方法，且复制时不显示菜单
+    handleCopy({fromIndex, toIndex, text, eventIndex, fromNode, toNode});
+  } else {
+    if (scribeProps.copyShow) {
+      // 初始化复制模版
+      const entitysInTemplate = entitys.filter(entity => !(entity.startOffset > scribbleEnd || entity.endOffset < scribbleStart));
+      //因为模板实体中包含未划取完整的实体，所以需要重新计算划取的起止范围
+      let start = scribbleStart, end = scribbleEnd;
+      // 计算出来所有实体中最开始的位置和最后面的位置
+      entitysInTemplate.forEach(item => {
+          // 开始位置谁在前用谁
+          start = item.startOffset > start ? start : item.startOffset;
+          // 结束位置谁在后用谁
+          end = item.endOffset > end ? item.endOffset : end;
+      })
+
+      // 取出包含划词中实体的真实文本内容
+      const scribbleText = page.text.substr(globalOffsetToPageOffset(start, page), end - start + 1);
+
+      // 将复制模版中的实体存入变量（第一次作为模版）
+      copyTemplate.entitys = entitysInTemplate;
+      // 将计算出的文本存入变量（第一次作为模版）
+      copyTemplate.text = scribbleText;
+      console.log(copyTemplate, '看看计算之后的对不对');
+    }
+    scribeShow.value = true;
+  }
+  contextShow.value = false;
+}
 const handleTransfer = () => {
   if(carverBtn.value) {
     // 结束划词操作
@@ -309,21 +768,16 @@ const handleTransfer = () => {
     scribeRef.value.reset();
   } else {
     // 开启划词操作
-    carver.select(true, e => {
-        if (e.text !== '') {
-            // callback(e)
-            console.log(e, 123);
-            const {clientX, clientY} = mousePosition;
-            scribeProps.event.clientX = clientX;
-            scribeProps.event.clientY = clientY;
-            scribeProps.target = e;
-            scribeProps.click = false;
-            scribeProps.type = 'label';
-            contextShow.value = false;
-            scribeShow.value = true;
-        }
-    }).catch(() => {
+    carver.select(true, carverSelect).catch(() => {
     });
+    if (connectBtn.value) {
+      // 关闭连线
+      // 结束连线操作
+      carver.cancelConnect();
+      // 关闭菜单
+      scribeShow.value = false;
+      connectBtn.value = !connectBtn.value;
+    }
   }
   carverBtn.value = !carverBtn.value;
 }
@@ -335,7 +789,14 @@ const handleConnect = () => {
     // 关闭菜单
     scribeShow.value = false;
   } else {
-    // 开启连线操作
+    if (carverBtn.value) {
+      // 开启连线操作
+      // 结束划词操作
+      carver.cancelSelect();
+      scribeShow.value = false;
+      scribeRef.value.reset();
+      carverBtn.value = !carverBtn.value;
+    }
   }
   connectBtn.value = !connectBtn.value;
 }
