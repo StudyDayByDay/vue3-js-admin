@@ -32,7 +32,7 @@
         <!-- 映射弹框 -->
         <mapDialog v-model="visible" :entity="mapEntity" @commit="mapCommit"></mapDialog>
         <!-- 复制弹框 -->
-        <copyDialog v-model="copyVisible" v-bind="copyShowData"></copyDialog>
+        <copyDialog v-model="copyVisible" v-bind="copyShowData" @commit="copyCommit" @cancel="copyCancel"></copyDialog>
     </div>
 </template>
 
@@ -73,6 +73,12 @@ let entityRelations = [];
 let copyTemplate = {
   text: '',
   entitys: []
+};
+// 复制参数数据
+const copyParams = {
+  mrEntityRequestList: [],
+  mrEntityRelationRequestList: [],
+  mrId
 };
 
 // 底部数据*****************
@@ -327,7 +333,24 @@ const entityRelationList = () => {
   });
 }
 // 划词操作方法 &&&&&&&&&&&&&&&&&&&
-// 复制操作
+// 复制确认
+const copyCommit = async () => {
+  console.log(copyParams, '看一看复制参数');
+  const {data: {entityRelationVoList, mrEntityVoList}} = await apis.copy(copyParams);
+  console.log(entityRelationVoList, mrEntityVoList, '123321');
+  // 进行渲染
+  renderPageEntitys(mrEntityVoList);
+  renderPageEntityRelation(entityRelationVoList);
+  // 将数据分辨存入实体集合和关系集合
+  entitys = entitys.concat(mrEntityVoList);
+  entityRelations = entityRelations.concat(entityRelationVoList);
+  carver.revoke();
+};
+// 复制取消
+const copyCancel = () => {
+  carver.revoke();
+};
+// 复制计算
 const handleCopy = (scribble) => {
   console.log('复制操作');
   //模板实体
@@ -367,12 +390,6 @@ const handleCopy = (scribble) => {
       return false
   })
 
-  //复制错误
-  const copyError = function(msg){
-    ElMessage.error(msg);
-    carver.revoke();
-  }
-
   let newEntitys = [],  //复制识别到的实体
       newEntityRelations = [],//复制识别到的实体关系
       offset = 0;
@@ -389,11 +406,13 @@ const handleCopy = (scribble) => {
               // 代表划词有选中了文本
               if (item.length > 0) {
                   newEntitys.push({
+                      id: Math.floor(Math.random()*(99999999-999999+1))+999999,
                       text: item,
                       startOffset: scribbleStart + offset,
                       endOffset: scribbleStart + offset + item.length - 1,
                       labelId: entitysInTemplate[0].labels[0].id,
-                      labelText: entitysInTemplate[0].labels[0].title
+                      labelText: entitysInTemplate[0].labels[0].title,
+                      mrId
                   })
               }
 
@@ -413,20 +432,24 @@ const handleCopy = (scribble) => {
           // 新划词的部分包含模版的第一个实体内容并且两个实体是先后连接关系
           if (start > -1 && parseInt(entitysInTemplate[0].endOffset) + 1 == entitysInTemplate[1].startOffset) {
               const entity1 = {
+                  id: Math.floor(Math.random()*(99999999-999999+1))+999999,
                   text: entitysInTemplate[0].text,
                   startOffset: parseInt(scribbleStart) + start,
                   endOffset: parseInt(scribbleStart) + start + entitysInTemplate[0].text.length - 1,
                   labelId: entitysInTemplate[0].labels[0].id,
                   labelText: entitysInTemplate[0].labels[0].title,
+                  mrId
               }
 
               const entity2Text = scribbleText.substr(entitysInTemplate[0].text.length)
               const entity2 = {
+                  id: Math.floor(Math.random()*(99999999-999999+1))+999999,
                   text: entity2Text,
                   startOffset: parseInt(scribbleStart) + start + entitysInTemplate[0].text.length,
                   endOffset: parseInt(scribbleStart) + start + entitysInTemplate[0].text.length + entity2Text.length - 1,
                   labelId: entitysInTemplate[1].labels[0].id,
                   labelText: entitysInTemplate[1].labels[0].title,
+                  mrId
               }
 
               newEntitys.push(entity1, entity2);
@@ -442,20 +465,24 @@ const handleCopy = (scribble) => {
                   if (index > -1) {
                       const entity1Text = scribbleText.substr(0, index)
                       const entity1 = {
+                          id: Math.floor(Math.random()*(99999999-999999+1))+999999,
                           text: entity1Text,
                           startOffset: parseInt(scribbleStart),
                           endOffset: parseInt(scribbleStart) + index - 1,
                           labelId: entitysInTemplate[0].labels[0].id,
                           labelText: entitysInTemplate[0].labels[0].title,
+                          mrId
                       }
 
                       const entity2Text = scribbleText.substr(index)
                       const entity2 = {
+                          id: Math.floor(Math.random()*(99999999-999999+1))+999999,
                           text: entity2Text,
                           startOffset: parseInt(scribbleStart) + index,
                           endOffset: parseInt(scribbleEnd),
                           labelId: entitysInTemplate[1].labels[0].id,
                           labelText: entitysInTemplate[1].labels[0].title,
+                          mrId
                       }
 
                       newEntitys.push(entity1, entity2)
@@ -470,19 +497,23 @@ const handleCopy = (scribble) => {
                               entity2Text = matches[2]
 
                           const entity1 = {
+                              id: Math.floor(Math.random()*(99999999-999999+1))+999999,
                               text: entity1Text,
                               startOffset: parseInt(scribbleStart),
                               endOffset: parseInt(scribbleStart) + entity1Text.length - 1,
                               labelId: entitysInTemplate[0].labels[0].id,
                               labelText: entitysInTemplate[0].labels[0].title,
+                              mrId
                           }
 
                           const entity2 = {
+                              id: Math.floor(Math.random()*(99999999-999999+1))+999999,
                               text: entity2Text,
                               startOffset: parseInt(scribbleStart) + entity1Text.length,
                               endOffset: parseInt(scribbleEnd),
                               labelId: entitysInTemplate[1].labels[0].id,
                               labelText: entitysInTemplate[1].labels[0].title,
+                              mrId
                           }
 
                           newEntitys.push(entity1, entity2)
@@ -617,11 +648,13 @@ const handleCopy = (scribble) => {
               //以分隔符去寻找实体
               const text = scribbleText.substr(seperatorOffset, index - seperatorOffset)
               newEntitys.push({
+                  id: Math.floor(Math.random()*(99999999-999999+1))+999999,
                   text: text,
                   startOffset: parseInt(scribbleStart) + seperatorOffset,
                   endOffset: parseInt(scribbleStart) + seperatorOffset + text.length - 1,
                   labelId: entitysInTemplate[i].labels[0].id,
-                  labelText: entitysInTemplate[i].labels[0].title
+                  labelText: entitysInTemplate[i].labels[0].title,
+                  mrId
               })
 
               // TODO：这里有问题
@@ -633,18 +666,21 @@ const handleCopy = (scribble) => {
               //实体会比分隔符多一个，所以这里要再添加一个实体
               const last = scribbleText.substr(seperatorOffset)
               newEntitys.push({
+                  id: Math.floor(Math.random()*(99999999-999999+1))+999999,
                   text: last,
                   startOffset: parseInt(scribbleStart) + seperatorOffset,
                   endOffset: parseInt(scribbleStart) + seperatorOffset + last.length - 1,
                   labelId: entitysInTemplate[entitysInTemplate.length - 1].labels[0].id,
-                  labelText: entitysInTemplate[entitysInTemplate.length - 1].labels[0].title
+                  labelText: entitysInTemplate[entitysInTemplate.length - 1].labels[0].title,
+                  mrId
               })
           } else {
               newEntitys = lasttry(entitysInTemplate, scribble)
           }
 
           if (newEntitys.length != entitysInTemplate.length) {
-              copyError('无效复制模式')
+              ElMessage.error('无效复制模式');
+              carver.revoke();
               return
           }
 
@@ -698,6 +734,18 @@ const handleCopy = (scribble) => {
     };
   });
   copyShowData.relations = newEntityRelations.map((newEntityRelation) => {
+    const {id: fromId} = newEntitys[newEntityRelation.from],
+    {id: toId} = newEntitys[newEntityRelation.to];
+    return {
+      fromId,
+      toId,
+      relationId: newEntityRelation.relationId,
+      mrId,
+    };
+  });
+  // 处理复制接口参数
+  copyParams.mrEntityRequestList = newEntitys;
+  copyParams.mrEntityRelationRequestList = newEntityRelations.map((newEntityRelation) => {
     const {text: startText, labelText: startLabel} = newEntitys[newEntityRelation.from],
     {text: endText, labelText: endLabel} = newEntitys[newEntityRelation.to];
     return {
@@ -873,14 +921,15 @@ const renderPageEntitys = (alone) => {
 }
 
 // 渲染页面关系
-const renderPageEntityRelation = () => {
+const renderPageEntityRelation = (alone) => {
   return new Promise((reslove, reject) => {
     const page = pages[currentPage.value - 1];
     const contentStartOffset = page.startOffset;
     const contentEndOffset = page.endOffset;
+    const handleArr = alone || entityRelations;
     const promiseArr = [];
 
-    entityRelations.filter(item => {
+    handleArr.filter(item => {
         return item.from.startOffset >= contentStartOffset && item.from.endOffset <= contentEndOffset
     }).forEach(item => {
       promiseArr.push(renderEntityRelation(item.id, item.fromId, item.toId, item.relationVo.title));

@@ -40,4 +40,9 @@ export default {
         url: '/mark/buildEntityMap',
         method: 'post'
     },
+    // 复制操作
+    copy: {
+        url: '/mark/copy',
+        method: 'post'
+    },
 };
