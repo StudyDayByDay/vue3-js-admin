@@ -80,7 +80,7 @@ const props = defineProps({
     }
 })
 
-const emit = defineEmits(['update:show', 'change', 'update:copy', 'copy']);
+const emit = defineEmits(['update:show', 'change', 'update:copy']);
 
 const left = computed(() => {
     return props.clientX + 30;
@@ -217,7 +217,7 @@ watch([() => props.type, () => props.target], () => {
 
 const handleCopy = () => {
     emit('update:copy', true);
-    emit('copy');
+    emit('update:show', false);
 }
 
 </script>

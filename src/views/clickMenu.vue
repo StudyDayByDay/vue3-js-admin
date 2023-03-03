@@ -5,7 +5,7 @@
           <div class="flex-item-1"></div>
           <colorType/>
           <span class="separator">|</span>
-          <el-button :type="carverBtn ? 'danger' : 'primary'" plain @click="handleTransfer">{{ `${carverBtn ? '结束' : '开始'}划词` }}</el-button>
+          <el-button :type="carverBtn ? 'danger' : 'primary'" plain @click="handleTransfer">{{ `${carverBtn ? '结束' : '开始'}${scribeCopy ? '复制' : '划词'}` }}</el-button>
           <el-button :type="connectBtn ? 'danger' : 'primary'" plain @click="handleConnect">{{ `${connectBtn ? '结束' : '开始'}连线` }}</el-button>
         </div>
         <div class="clickMenu-content" id="carver" ref="carverPanel"></div>
@@ -27,7 +27,6 @@
             v-model:show="scribeShow"
             v-model:copy="scribeCopy"
             @change="scribeTransferChange"
-            @copy="clickCopy"
         />
         <!-- 映射弹框 -->
         <mapDialog v-model="visible" :entity="mapEntity" @commit="mapCommit"></mapDialog>
@@ -129,22 +128,22 @@ const copyShowData = reactive({
 
 
 onMounted(() => {
+  // 初始化划词工具
   initialize();
+  // 初始化接口数据
   getInitData();
+  // 监听点击事件
   document.onclick = (e) => {
     e.stopPropagation();
     console.log(contextRef.value, '43333333');
     contextRef.value.onclick(e);
     scribeRef.value.onclick(e);
   }
+  // 监听按键事件
   document.onkeydown = (e) => {
     scribeRef.value.onkeydown(e);
     ctrlZ(e);
   }
-  // carverPanel.value.onscroll = (e) => {
-  //   contextRef.value.onscroll(e);
-  //   scribeRef.value.onscroll(e);
-  // }
   // 处理carver插件删除时导致的height变化引起的scroll跳动问题
   handleScroll();
 });
@@ -156,10 +155,11 @@ const handleScroll = () => {
   let topPOffset = false;
   // 存储滚动时候最上边缘元素以及偏移大小
   const funStorePos = function () {
+    // 返回一个DOMRect对象，其提供了元素的大小及其相对于视口的位置
       var bounce = carverPanel.value.getBoundingClientRect();
       var pointX = bounce.left + carverPanel.value.clientWidth / 2;
       var pointY = bounce.top + 1;
-
+      // 该函数返还在特定坐标点下的 HTML 元素数组。
       targetEle = document.elementsFromPoint(pointX, pointY)[0];
 
       if (targetEle == carverPanel.value) {
@@ -335,9 +335,7 @@ const entityRelationList = () => {
 // 划词操作方法 &&&&&&&&&&&&&&&&&&&
 // 复制确认
 const copyCommit = async () => {
-  console.log(copyParams, '看一看复制参数');
   const {data: {entityRelationVoList, mrEntityVoList}} = await apis.copy(copyParams);
-  console.log(entityRelationVoList, mrEntityVoList, '123321');
   // 进行渲染
   renderPageEntitys(mrEntityVoList);
   renderPageEntityRelation(entityRelationVoList);
@@ -759,29 +757,26 @@ const handleCopy = (scribble) => {
   // 打开dialog
   copyVisible.value = true;
 };
-// 菜单点击复制
-const clickCopy = () => {
-  scribeShow.value = false;
-}
 // 划词操作
 const carverSelect = ({fromIndex, toIndex, text, eventIndex, fromNode, toNode}) => {
   console.log(fromIndex, toIndex, text, eventIndex, fromNode, toNode);
   if (!text) return;
-  const page = pages[currentPage.value - 1];
-  const scribbleStart = pageOffsetToGlobalOffset(fromIndex, page);
-  const scribbleEnd = pageOffsetToGlobalOffset(toIndex, page);
   const {clientX, clientY} = mousePosition;
+  // 设置菜单
   scribeProps.clientX = clientX;
   scribeProps.clientY = clientY;
   scribeProps.target = {fromIndex, toIndex, text, eventIndex, fromNode, toNode};
   scribeProps.click = false;
   scribeProps.type = 'label';
-  // 如果划取的内容里面有实体就展示复制按钮
-  scribeProps.copyShow = entitys.some(entity => !(entity.startOffset > scribbleEnd || entity.endOffset < scribbleStart));
   if (scribeCopy.value) {
     // 代表点击了复制按钮，执行handleCopy方法，且复制时不显示菜单
     handleCopy({fromIndex, toIndex, text, eventIndex, fromNode, toNode});
   } else {
+    const page = pages[currentPage.value - 1];
+    const scribbleStart = pageOffsetToGlobalOffset(fromIndex, page);
+    const scribbleEnd = pageOffsetToGlobalOffset(toIndex, page);
+    // 如果划取的内容里面有实体就展示复制按钮
+    scribeProps.copyShow = entitys.some(entity => !(entity.startOffset > scribbleEnd || entity.endOffset < scribbleStart));
     if (scribeProps.copyShow) {
       // 初始化复制模版
       const entitysInTemplate = entitys.filter(entity => !(entity.startOffset > scribbleEnd || entity.endOffset < scribbleStart));
@@ -1107,7 +1102,7 @@ const mapCommit = async (e) => {
   })
 }
 const ctrlZ = (e) => {
-  if (e.ctrlKey == true && e.keyCode == 90) {//Ctrl+S
+  if (e.ctrlKey == true && e.keyCode == 90) {//Ctrl+Z
     if (carverBtn.value | connectBtn.value) {
       scribeShow.value = false;
       carver.revoke();
